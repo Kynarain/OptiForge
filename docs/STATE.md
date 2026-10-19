@@ -149,6 +149,25 @@ OptiFine 自己打印对应的 `Forge version:`。1.21.7/8/9/10/11 都**不需�
 
 rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area: 51%` 卡住，换同实例的
 `CaptureWorld`（3.8 MB）秒进——卡的是世界不是加载器。
+### 26.x：环境就绪，卡在一处接口注入（2026-10-20）
+
+- 已下载 **JDK 25**（`build/jdk25`，Temurin 25.0.4.1）——26.x 必需，JDK 27 上 Forge 64 会因
+  `Module.implAddExportsOrOpens` 缺失报错。
+- **对照组**：纯 Forge 26.1.2（64.1.5）+ JDK 25 → `Setting user` + `Sound engine started`、0 崩溃，
+  说明 rig 本身没问题。
+- **带 OptiForge**：仍然
+  `NoClassDefFoundError: net/minecraftforge/client/extensions/IForgeVertexFormat`，抛点是游戏类
+  `com.mojang.blaze3d.vertex.DefaultVertexFormat.<clinit>`。
+  - 我们产出的 `DefaultVertexFormat`（OptiFine 载荷）里**没有任何** Forge 引用（扫过常量池），
+    基包 jar（`versions/26.1.2-forge-64.1.5/26.1.2-forge-64.1.5.jar`）里的同名类也**没有**实现该接口
+    → 说明这个接口是 Forge 在运行时（Mixin/transformer）后加的。
+  - 已实现"并集"（`mergeInPlaceAdditions`：把 transform 入参里多出来的接口/方法/字段并进我们的结果），
+    但**入参里也没有**该接口 → 说明它是在我们之后才被加上的，或者由另一种机制（AT+运行时注入）完成。
+    并集本身无害：1.21.11 回归仍 `Dev joined the game`、0 崩溃。
+- 下一步：在 Forge 64 里定位给 `DefaultVertexFormat` 加 `IForgeVertexFormat` 的那段代码
+  （大概率是 forge 的 mixin 配置），确认它在我们之后运行却没生效的原因；或直接由 OptiForge
+  按"类名 → 应实现的接口"补上（先只补这一个）。另需照旧补 `optifine/**` 的
+  `OptiFineResourceLocator`（26.x 的 Reflector 报 "Class not present"）。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -205,6 +224,25 @@ OptiFine 自己打印对应的 `Forge version:`。1.21.7/8/9/10/11 都**不需�
 
 rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area: 51%` 卡住，换同实例的
 `CaptureWorld`（3.8 MB）秒进——卡的是世界不是加载器。
+### 26.x：环境就绪，卡在一处接口注入（2026-10-20）
+
+- 已下载 **JDK 25**（`build/jdk25`，Temurin 25.0.4.1）——26.x 必需，JDK 27 上 Forge 64 会因
+  `Module.implAddExportsOrOpens` 缺失报错。
+- **对照组**：纯 Forge 26.1.2（64.1.5）+ JDK 25 → `Setting user` + `Sound engine started`、0 崩溃，
+  说明 rig 本身没问题。
+- **带 OptiForge**：仍然
+  `NoClassDefFoundError: net/minecraftforge/client/extensions/IForgeVertexFormat`，抛点是游戏类
+  `com.mojang.blaze3d.vertex.DefaultVertexFormat.<clinit>`。
+  - 我们产出的 `DefaultVertexFormat`（OptiFine 载荷）里**没有任何** Forge 引用（扫过常量池），
+    基包 jar（`versions/26.1.2-forge-64.1.5/26.1.2-forge-64.1.5.jar`）里的同名类也**没有**实现该接口
+    → 说明这个接口是 Forge 在运行时（Mixin/transformer）后加的。
+  - 已实现"并集"（`mergeInPlaceAdditions`：把 transform 入参里多出来的接口/方法/字段并进我们的结果），
+    但**入参里也没有**该接口 → 说明它是在我们之后才被加上的，或者由另一种机制（AT+运行时注入）完成。
+    并集本身无害：1.21.11 回归仍 `Dev joined the game`、0 崩溃。
+- 下一步：在 Forge 64 里定位给 `DefaultVertexFormat` 加 `IForgeVertexFormat` 的那段代码
+  （大概率是 forge 的 mixin 配置），确认它在我们之后运行却没生效的原因；或直接由 OptiForge
+  按"类名 → 应实现的接口"补上（先只补这一个）。另需照旧补 `optifine/**` 的
+  `OptiFineResourceLocator`（26.x 的 Reflector 报 "Class not present"）。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

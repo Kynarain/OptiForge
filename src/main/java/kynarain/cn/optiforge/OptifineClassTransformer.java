@@ -43,8 +43,41 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         if (prepared == null) return input;
         ClassNode node = new ClassNode();
         new ClassReader(prepared).accept(node, 0);
+        mergeInPlaceAdditions(input, node);
         applied++;
         return node;
+    }
+
+    /**
+     * Keeps members and interfaces that other transformers already added to the incoming class.
+     *
+     * <p>The {@code targetPreClass} order is not stable across Forge versions: on Forge 64 (MC 26.1.2)
+     * Mixin runs first and adds {@code IForgeVertexFormat} to {@code DefaultVertexFormat}; returning our
+     * own node then dropped it and the launch died with
+     * {@code NoClassDefFoundError: net/minecraftforge/client/extensions/IForgeVertexFormat} from that very
+     * class's static initialiser. Anything the incoming node has and the prepared one does not is carried
+     * over, so OptiFine's patch wins where both define the same member and nobody's additions are lost.
+     */
+    private static void mergeInPlaceAdditions(ClassNode incoming, ClassNode prepared) {
+        if (incoming == null) return;
+        if (prepared.interfaces == null) prepared.interfaces = new java.util.ArrayList<>();
+        for (String itf : incoming.interfaces) {
+            if (!prepared.interfaces.contains(itf)) prepared.interfaces.add(itf);
+        }
+        java.util.Set<String> methods = new java.util.HashSet<>();
+        for (org.objectweb.asm.tree.MethodNode method : prepared.methods) {
+            methods.add(method.name + method.desc);
+        }
+        for (org.objectweb.asm.tree.MethodNode method : incoming.methods) {
+            if (methods.add(method.name + method.desc)) prepared.methods.add(method);
+        }
+        java.util.Set<String> fields = new java.util.HashSet<>();
+        for (org.objectweb.asm.tree.FieldNode field : prepared.fields) {
+            fields.add(field.name + field.desc);
+        }
+        for (org.objectweb.asm.tree.FieldNode field : incoming.fields) {
+            if (fields.add(field.name + field.desc)) prepared.fields.add(field);
+        }
     }
 
     @Override
