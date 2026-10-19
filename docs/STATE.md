@@ -189,6 +189,27 @@ rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area:
 第一版把**原版的 `<clinit>`** 也并了进来，而 OptiFine 有时把原版静态字段改成实例字段
 （`BreezeWindLayer.TEXTURE_LOCATION`），于是 `IncompatibleClassChangeError: Expected static field`。
 现在**跳过 `<clinit>`/`<init>`**，1.21 与 1.21.6 干净环境下均通过。
+### 26.1.2 的真实首因（本轮定位）
+
+用 `-Xlog:class+load=info` 跑完后，日志里**第一个**异常不是 `IForgeVertexFormat`，而是：
+
+    java.lang.IllegalArgumentException: wrong number of arguments: 4 expected: 5
+      at net.optifine.reflect.Reflector.callLong
+      at com.mojang.blaze3d.platform.Window.<init>(Window.java:113)
+
+即 OptiFine 通过反射调 `ImmediateWindowHandler.setupMinecraftWindow`（4 个参数），而 Forge 26 里这个方法
+变成了 **5 个参数**。这条只是 OptiFine 记的 WARN；随后 Forge 打 `Preparing crash report`，崩溃报告里的
+`NoClassDefFoundError: IForgeVertexFormat` 是**后续**错误，不是首因。
+
+下一步（二选一）：
+
+1. 在 `CompatFixes` 里给 `net.minecraft.client.Minecraft`/`Window` 的 Reflector 调用补上第 5 个参数
+   （需要先确认真实签名：`javap` Forge 26 的 `ImmediateWindowHandler`）；
+2. 或者让 OptiFine 跳过 `ImmediateWindowHandler` 路径（Forge 26 自己的窗口处理接管），代价是 early-window
+   行为可能与 OptiFine 预期不同。
+
+另外 26.x 还缺 `optifine/**`（`OptiFineResourceLocator`）的 staging：日志里 OptiFine 自己报
+`(Reflector) Class not present: optifine.OptiFineResourceLocator`。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -285,6 +306,27 @@ rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area:
 第一版把**原版的 `<clinit>`** 也并了进来，而 OptiFine 有时把原版静态字段改成实例字段
 （`BreezeWindLayer.TEXTURE_LOCATION`），于是 `IncompatibleClassChangeError: Expected static field`。
 现在**跳过 `<clinit>`/`<init>`**，1.21 与 1.21.6 干净环境下均通过。
+### 26.1.2 的真实首因（本轮定位）
+
+用 `-Xlog:class+load=info` 跑完后，日志里**第一个**异常不是 `IForgeVertexFormat`，而是：
+
+    java.lang.IllegalArgumentException: wrong number of arguments: 4 expected: 5
+      at net.optifine.reflect.Reflector.callLong
+      at com.mojang.blaze3d.platform.Window.<init>(Window.java:113)
+
+即 OptiFine 通过反射调 `ImmediateWindowHandler.setupMinecraftWindow`（4 个参数），而 Forge 26 里这个方法
+变成了 **5 个参数**。这条只是 OptiFine 记的 WARN；随后 Forge 打 `Preparing crash report`，崩溃报告里的
+`NoClassDefFoundError: IForgeVertexFormat` 是**后续**错误，不是首因。
+
+下一步（二选一）：
+
+1. 在 `CompatFixes` 里给 `net.minecraft.client.Minecraft`/`Window` 的 Reflector 调用补上第 5 个参数
+   （需要先确认真实签名：`javap` Forge 26 的 `ImmediateWindowHandler`）；
+2. 或者让 OptiFine 跳过 `ImmediateWindowHandler` 路径（Forge 26 自己的窗口处理接管），代价是 early-window
+   行为可能与 OptiFine 预期不同。
+
+另外 26.x 还缺 `optifine/**`（`OptiFineResourceLocator`）的 staging：日志里 OptiFine 自己报
+`(Reflector) Class not present: optifine.OptiFineResourceLocator`。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
