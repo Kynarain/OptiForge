@@ -351,6 +351,18 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 
 下一步（真解法）：把"整类替换"改成**差异应用**——构建期算出 OptiFine 补丁相对基包的差异，运行时把差异
 应用到 Forge 处理过的类上，而不是用我们的整份字节替换；这样 Mixin 的注入天然保留。
+### 26.x：父类被补丁改回 Object 的问题修好了（本轮）
+
+- 现象：26.2 进世界后 `NoSuchMethodError: Gui.popLayer()`。查证：Forge 的 client jar 里
+  `Gui extends net.minecraftforge.client.gui.overlay.ForgeLayerInstance`（`popLayer` 继承自它），
+  而 **OptiFine 的补丁输出把父类写回了 `Object`**（它的 xdelta 以原版为基准）。
+- 修法（`OptifineClassTransformer`）：合并时若我方父类是 `Object` 而入参（Forge 处理过）的父类不是，
+  **采纳入参的父类**，并把构造器里的 `invokespecial java/lang/Object.<init>()V` 改写成
+  `ForgeLayerInstance.<init>(Minecraft)`（`Gui` 构造器第一个参数就是 `Minecraft`）。
+  不重写会得到 `VerifyError: Bad <init> method call ... Type java/lang/Object is not assignable to Gui`。
+- 结果：**26.2 的 `popLayer` 错误消失**，进世界后剩下的唯一崩溃就是与 26.1.2 相同的
+  `LootModifierManager` 时序断言——**两条 26.x 线现在收敛到同一个问题**。
+- 回归：1.21.7 这条规则不触发（无 `adopting superclass` 日志），仍 `joined the game`、0 崩溃。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -609,6 +621,18 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 
 下一步（真解法）：把"整类替换"改成**差异应用**——构建期算出 OptiFine 补丁相对基包的差异，运行时把差异
 应用到 Forge 处理过的类上，而不是用我们的整份字节替换；这样 Mixin 的注入天然保留。
+### 26.x：父类被补丁改回 Object 的问题修好了（本轮）
+
+- 现象：26.2 进世界后 `NoSuchMethodError: Gui.popLayer()`。查证：Forge 的 client jar 里
+  `Gui extends net.minecraftforge.client.gui.overlay.ForgeLayerInstance`（`popLayer` 继承自它），
+  而 **OptiFine 的补丁输出把父类写回了 `Object`**（它的 xdelta 以原版为基准）。
+- 修法（`OptifineClassTransformer`）：合并时若我方父类是 `Object` 而入参（Forge 处理过）的父类不是，
+  **采纳入参的父类**，并把构造器里的 `invokespecial java/lang/Object.<init>()V` 改写成
+  `ForgeLayerInstance.<init>(Minecraft)`（`Gui` 构造器第一个参数就是 `Minecraft`）。
+  不重写会得到 `VerifyError: Bad <init> method call ... Type java/lang/Object is not assignable to Gui`。
+- 结果：**26.2 的 `popLayer` 错误消失**，进世界后剩下的唯一崩溃就是与 26.1.2 相同的
+  `LootModifierManager` 时序断言——**两条 26.x 线现在收敛到同一个问题**。
+- 回归：1.21.7 这条规则不触发（无 `adopting superclass` 日志），仍 `joined the game`、0 崩溃。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

@@ -61,6 +61,18 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
      */
     private static void mergeInPlaceAdditions(ClassNode incoming, ClassNode prepared) {
         if (incoming == null) return;
+        // OptiFine's payload is a delta against vanilla, so its output can lose a superclass Forge added.
+        // Measured on 26.2: Forge's client jar has Gui extends ForgeLayerInstance (which carries popLayer),
+        // OptiFine's version extends Object, and Screen.onClose then died with
+        // "NoSuchMethodError: Gui.popLayer()". Adopting the incoming superclass restores the inherited API.
+        if (incoming.superName != null && !incoming.superName.equals(prepared.superName)
+                && "java/lang/Object".equals(prepared.superName)) {
+            System.out.println("[OptiForge] adopting superclass " + incoming.superName + " for "
+                    + prepared.name);
+            String adopted = incoming.superName;
+            prepared.superName = adopted;
+            rewireSuperCall(prepared, adopted);
+        }
         if (prepared.interfaces == null) prepared.interfaces = new java.util.ArrayList<>();
         for (String itf : incoming.interfaces) {
             if (!prepared.interfaces.contains(itf)) prepared.interfaces.add(itf);
@@ -214,5 +226,35 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         }
         if (extra.length() > 0) {
             System.out.println("[OptiForge] incoming additions for " + className + ": " + extra);
+        }
+    }
+
+    /**
+     * Points the constructor's {@code Object.<init>} call at the adopted superclass.
+     *
+     * <p>Measured on 26.2 after adopting {@code ForgeLayerInstance} for {@code Gui}: leaving the original
+     * {@code invokespecial java/lang/Object.<init>()V} produced
+     * {@code VerifyError: Bad <init> method call ... Type java/lang/Object is not assignable to Gui}. Forge's
+     * overlay base takes the {@code Minecraft} instance, which is the first constructor parameter here.
+     */
+    private static void rewireSuperCall(ClassNode prepared, String superName) {
+        boolean takesMinecraft = false;
+        if (superName.endsWith("ForgeLayerInstance")) takesMinecraft = true;
+        for (org.objectweb.asm.tree.MethodNode method : prepared.methods) {
+            if (!method.name.equals("<init>")) continue;
+            boolean firstParamIsMinecraft = method.desc.startsWith("(Lnet/minecraft/client/Minecraft;");
+            for (org.objectweb.asm.tree.AbstractInsnNode instruction : method.instructions) {
+                if (!(instruction instanceof org.objectweb.asm.tree.MethodInsnNode call)) continue;
+                if (call.getOpcode() != org.objectweb.asm.Opcodes.INVOKESPECIAL) continue;
+                if (!call.owner.equals("java/lang/Object") || !call.name.equals("<init>")) continue;
+                call.owner = superName;
+                if (takesMinecraft && firstParamIsMinecraft) {
+                    call.desc = "(Lnet/minecraft/client/Minecraft;)V";
+                    method.instructions.insertBefore(call, new org.objectweb.asm.tree.VarInsnNode(
+                            org.objectweb.asm.Opcodes.ALOAD, 1));
+                } else {
+                    call.desc = "()V";
+                }
+            }
         }
     }}
