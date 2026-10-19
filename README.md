@@ -2,18 +2,19 @@
 
 > OptiFine on Forge, with Forge Mod Loader loaded alongside.
 
-版本号遵循 SemVer（当前 `0.3.0`，见 `gradle.properties` 的 `mod_version_base`）。
+版本号遵循 SemVer（当前 `0.4.0`，见 `gradle.properties` 的 `mod_version_base`）。
 
 在 **Forge** 上加载 **OptiFine** 的模组 —— 和 OptiFabric 在 Fabric 上做的事一样，只是目标换成 Forge。
 重点是那些 OptiFine 官方标成 **`Forge N/A`（not compatible with Forge）** 的构建：`1.21`、`1.21.6`、
 `1.21.7`、`1.21.9`、`26.1.2`、`26.2` 整条线都是 N/A。
 
-## 实测结果（0.3.0）
+## 实测结果（0.4.0）
 
 | 组合 | 启动 | 进世界 |
 |---|---|---|
 | **1.21 + Forge 51.0.33 + OptiFine `1.21 J1_pre9`（官方 N/A）** | 是 | **是**（`Dev joined the game`） |
 | **1.21.6 + Forge 56.0.9 + OptiFine `1.21.6 J6_pre3`（官方 N/A）** | 是 | **是**（`Dev joined the game`） |
+| **1.21.7 + Forge 57.0.3 + OptiFine `1.21.7 J6_pre7`（官方 N/A）** | 是 | **是**（`Dev joined the game`） |
 | 1.20.1 + Forge 47.4.23 + OptiFine `1.20.1 I6`（官方声明兼容） | 是 | 未复现 |
 
 两条 N/A 线都是：`Setting user`、`Sound engine started`、250 条上下 `[OptiFine]` 日志、0 崩溃报告、
