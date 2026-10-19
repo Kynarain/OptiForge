@@ -305,6 +305,22 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 2. 或在 `ForgeInternalHandler.getLootModifierManager` 上做兜底（Forge 的类，我们可以 transform：
    `INSTANCE` 为空时返回一个空的 manager——需要先确认 `LootModifierManager` 能不能无参构造）；
 3. 或延迟"进世界"（不可控，跳过）。
+### 1.21.1：进世界后 `Direction.getUpdateOrder()` NPE（本轮发现，未修）
+
+`1.21.1 + Forge 52.1.20 + OptiFine J1_pre9`（官方 N/A）能启动、能进世界，但进世界后 ~0.2s：
+
+    NullPointerException: Cannot invoke "java.util.List.iterator()" because the return value of
+    "net.minecraft.core.Direction.getUpdateOrder()" is null
+      at Level.updateNeighbourForOutputSignal
+
+- 我们产出的 `Direction`（OptiFine 补丁版）里**没有** `getUpdateOrder`；运行时能调到它说明是 Forge 的 Mixin
+  补的，但它依赖的静态数据没被初始化——即"整类替换 + 只并成员、不并 `<clinit>`"的后果。
+- 试过 `-Doptiforge.skipClasses=net.minecraft.core.Direction`（本轮新增的诊断开关）：能跳过替换，但 OptiFine
+  自己的 `RenderEnv` 又需要 OptiFine 给的 AT（`Direction.VALUES` 可访问）→ `IllegalAccessError`。所以不能简单跳过。
+- 正确的下一步：合并时**把入参 `<clinit>` 里只初始化"我们缺失字段"的那部分搬过来**（不能整段并，避免二次初始化）。
+
+顺带确认：1.21.1 的基包本来就选的是 `1.21.1-forge-52.1.20.jar`（Forge 的 client jar），不是原版 jar——
+`findBaseJar` 现在也显式优先 Forge client jar（对其它线无影响）。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -517,6 +533,22 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 2. 或在 `ForgeInternalHandler.getLootModifierManager` 上做兜底（Forge 的类，我们可以 transform：
    `INSTANCE` 为空时返回一个空的 manager——需要先确认 `LootModifierManager` 能不能无参构造）；
 3. 或延迟"进世界"（不可控，跳过）。
+### 1.21.1：进世界后 `Direction.getUpdateOrder()` NPE（本轮发现，未修）
+
+`1.21.1 + Forge 52.1.20 + OptiFine J1_pre9`（官方 N/A）能启动、能进世界，但进世界后 ~0.2s：
+
+    NullPointerException: Cannot invoke "java.util.List.iterator()" because the return value of
+    "net.minecraft.core.Direction.getUpdateOrder()" is null
+      at Level.updateNeighbourForOutputSignal
+
+- 我们产出的 `Direction`（OptiFine 补丁版）里**没有** `getUpdateOrder`；运行时能调到它说明是 Forge 的 Mixin
+  补的，但它依赖的静态数据没被初始化——即"整类替换 + 只并成员、不并 `<clinit>`"的后果。
+- 试过 `-Doptiforge.skipClasses=net.minecraft.core.Direction`（本轮新增的诊断开关）：能跳过替换，但 OptiFine
+  自己的 `RenderEnv` 又需要 OptiFine 给的 AT（`Direction.VALUES` 可访问）→ `IllegalAccessError`。所以不能简单跳过。
+- 正确的下一步：合并时**把入参 `<clinit>` 里只初始化"我们缺失字段"的那部分搬过来**（不能整段并，避免二次初始化）。
+
+顺带确认：1.21.1 的基包本来就选的是 `1.21.1-forge-52.1.20.jar`（Forge 的 client jar），不是原版 jar——
+`findBaseJar` 现在也显式优先 Forge client jar（对其它线无影响）。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

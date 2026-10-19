@@ -284,7 +284,14 @@ public final class OptifinePack {
             candidates.add(p);
         }
         try (OptifinePatcher patcher = new OptifinePatcher(optifineJar)) {
-            for (Path candidate : candidates) {
+            // Prefer the jar the game actually loads. Forge ships a client jar that already carries its
+            // own binary patches (measured on 1.21.1: Direction.getUpdateOrder and its data come from
+            // there). Patching the *vanilla* jar instead produced classes without those additions and the
+            // world died with "Cannot invoke List.iterator() because Direction.getUpdateOrder() is null".
+            // The MD5 probe below still decides, this only changes the order.
+            List<Path> ordered = new ArrayList<>(candidates);
+            ordered.sort((a, b) -> Boolean.compare(isForgeClientJar(a), isForgeClientJar(b)) * -1);
+            for (Path candidate : ordered) {
                 if (!Files.isRegularFile(candidate)) continue;
                 try {
                     byte[] patched = patcher.apply("net/minecraft/CrashReport", candidate);
@@ -300,6 +307,18 @@ public final class OptifinePack {
         }
         notes.append("could not find the vanilla client jar; pass -Doptiforge.vanilla=<path>\n");
         return null;
+    }
+
+    /** @return true when the jar looks like Forge's patched client jar (the one the game loads). */
+    private static boolean isForgeClientJar(Path jar) {
+        String name = jar.getFileName().toString().toLowerCase(Locale.ROOT);
+        if (name.contains("-forge-")) return true;
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {
+            return zip.getEntry("net/minecraftforge/client/extensions/IForgeBlockModel") != null
+                    || zip.getEntry("net/minecraftforge/common/ForgeMod.class") != null;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /**
@@ -432,6 +451,20 @@ public final class OptifinePack {
                         ? "classpath index: " + available.size() + " classes; absent Forge interfaces dropped: "
                                 + strippedInterfaces + " class(es)\n"
                         : "classpath index: skipped (launch versions unknown), no interface dropped\n");
+        // Diagnostics escape hatch: -Doptiforge.skipClasses=a.b.C,d.e.F leaves those classes to Forge.
+        // Used to isolate classes where OptiFine's whole-class replacement drops something Forge adds at
+        // runtime (measured on 1.21.1: Direction.getUpdateOrder() returned null because the mixin-added
+        // data was missing from the replaced class).
+        String skip = System.getProperty("optiforge.skipClasses", "");
+        if (!skip.isBlank()) {
+            for (String name : skip.split(",")) {
+                String trimmed = name.trim();
+                if (!trimmed.isEmpty() && patched.remove(trimmed) != null) {
+                    notes.append("skipped (per -Doptiforge.skipClasses): ").append(trimmed).append('\n');
+                    System.out.println("[OptiForge] skipped " + trimmed);
+                }
+            }
+        }
         int compatFixed = 0;
         for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
             byte[] updated = CompatFixes.apply(entry.getValue(), entry.getKey(), modernWindow);
