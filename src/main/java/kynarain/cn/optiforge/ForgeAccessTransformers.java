@@ -34,6 +34,14 @@ public final class ForgeAccessTransformers {
     /** class name (dotted) -> grants. */
     private final Map<String, List<Grant>> grants = new HashMap<>();
     private SrgRemap remap;
+    /**
+     * When true, a grant may widen access but never narrow it.
+     *
+     * <p>Forge 26.x configs contain narrowing lines (26.2: {@code private-f ... LevelRenderer
+     * weatherEffectRenderer}) that break same-package callers once applied to our prepared copy. Making this
+     * global was tried and regressed the verified 1.21.7 line, so it is only enabled for 26.x.
+     */
+    private boolean widenOnly;
 
     private static final class Grant {
         final String member;
@@ -50,8 +58,10 @@ public final class ForgeAccessTransformers {
         }
     }
 
-    public static ForgeAccessTransformers load(SrgRemap remap, Path gameDir, StringBuilder notes) {
+    public static ForgeAccessTransformers load(SrgRemap remap, Path gameDir, boolean widenOnly,
+                                              StringBuilder notes) {
         ForgeAccessTransformers at = new ForgeAccessTransformers();
+        at.widenOnly = widenOnly;
         at.remap = remap;
         int files = 0;
         int lines = 0;
@@ -178,12 +188,20 @@ public final class ForgeAccessTransformers {
         return writer.toByteArray();
     }
 
-    private static int widen(int access, int newAccess, boolean clearFinal) {
-        // Applies the requested visibility exactly. Making this widen-only was tried for 26.2 (whose config
-        // has "private-f net.minecraft.client.renderer.LevelRenderer weatherEffectRenderer", which broke a
-        // same-package caller): it fixed that one error but regressed the verified 1.21.7 line instead, so
-        // the exact behaviour is kept and the 26.2 case stays documented in docs/STATE.md.
-        int result = (access & ~(Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED | Opcodes.ACC_PRIVATE)) | newAccess;
+    private int widen(int access, int newAccess, boolean clearFinal) {
+        int visibilityMask = Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED | Opcodes.ACC_PRIVATE;
+        int requested = newAccess & visibilityMask;
+        int current = access & visibilityMask;
+        int effective = newAccess;
+        if (widenOnly && requested != 0 && current != 0) {
+            // Keep the member as visible as it already is: a narrowing line must not make a same-package
+            // caller fail. Widening lines still apply, and "-f" is still honoured.
+            effective = current == Opcodes.ACC_PUBLIC ? Opcodes.ACC_PUBLIC
+                    : current == Opcodes.ACC_PROTECTED ? (requested == Opcodes.ACC_PUBLIC
+                            ? Opcodes.ACC_PUBLIC : Opcodes.ACC_PROTECTED)
+                    : requested;
+        }
+        int result = (access & ~visibilityMask) | effective;
         return clearFinal ? (result & ~Opcodes.ACC_FINAL) : result;
     }
 }

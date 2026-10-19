@@ -337,6 +337,20 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
   **栈模拟**来确定语句起点。
 
 两处实验都已回退，`tools/build.ps1` / 1.21.7 回归通过（`joined the game`、0 崩溃）。
+### 26.x：AT 收窄按版本处理（本轮），`popLayer` 类问题仍在
+
+- AT 重放现在**只在 26.x 上"只放宽不收窄"**（`ForgeAccessTransformers` 的 `widenOnly`，由 `mcVersion`
+  决定）。效果：26.2 的 `IllegalAccessError: LevelExtractor -> private LevelRenderer.weatherEffectRenderer`
+  消失，崩溃数 2 → 1；1.21.x 行为完全不变（1.21.7 复查 `joined the game`、0 崩溃）。
+- 26.2 剩下的错是 `NoSuchMethodError: Gui.popLayer()`（`Screen.onClose` 调用）。查过：**基包 jar 里的
+  `Gui` 也没有 `popLayer`**，所以它是 Forge 运行时加给 `Gui` 的方法，而我们整类替换后它没生效——
+  和 1.21.1 的 `Direction.getUpdateOrder()` 同一类问题（Mixin 在我们之后注入，注到我们替换的类上不成）。
+- 试过让 transformer **投 DEFER**（期望最后运行、能看到 Forge 的注入）：ModLauncher 直接
+  `VoteDeadlockException`（`ClassTransformer.performVote`）。该开关 `-Doptiforge.deferVote=true` 保留但默认关闭，
+  结论记在这里：这条路不通。
+
+下一步（真解法）：把"整类替换"改成**差异应用**——构建期算出 OptiFine 补丁相对基包的差异，运行时把差异
+应用到 Forge 处理过的类上，而不是用我们的整份字节替换；这样 Mixin 的注入天然保留。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -581,6 +595,20 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
   **栈模拟**来确定语句起点。
 
 两处实验都已回退，`tools/build.ps1` / 1.21.7 回归通过（`joined the game`、0 崩溃）。
+### 26.x：AT 收窄按版本处理（本轮），`popLayer` 类问题仍在
+
+- AT 重放现在**只在 26.x 上"只放宽不收窄"**（`ForgeAccessTransformers` 的 `widenOnly`，由 `mcVersion`
+  决定）。效果：26.2 的 `IllegalAccessError: LevelExtractor -> private LevelRenderer.weatherEffectRenderer`
+  消失，崩溃数 2 → 1；1.21.x 行为完全不变（1.21.7 复查 `joined the game`、0 崩溃）。
+- 26.2 剩下的错是 `NoSuchMethodError: Gui.popLayer()`（`Screen.onClose` 调用）。查过：**基包 jar 里的
+  `Gui` 也没有 `popLayer`**，所以它是 Forge 运行时加给 `Gui` 的方法，而我们整类替换后它没生效——
+  和 1.21.1 的 `Direction.getUpdateOrder()` 同一类问题（Mixin 在我们之后注入，注到我们替换的类上不成）。
+- 试过让 transformer **投 DEFER**（期望最后运行、能看到 Forge 的注入）：ModLauncher 直接
+  `VoteDeadlockException`（`ClassTransformer.performVote`）。该开关 `-Doptiforge.deferVote=true` 保留但默认关闭，
+  结论记在这里：这条路不通。
+
+下一步（真解法）：把"整类替换"改成**差异应用**——构建期算出 OptiFine 补丁相对基包的差异，运行时把差异
+应用到 Forge 处理过的类上，而不是用我们的整份字节替换；这样 Mixin 的注入天然保留。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

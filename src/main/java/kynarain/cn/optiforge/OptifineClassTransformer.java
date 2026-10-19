@@ -166,11 +166,20 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
                 + adopted.size() + " adopted field(s) in " + prepared.name);
     }
 
+    /**
+     * Votes DEFER so this transformer runs as late as ModLauncher allows.
+     *
+     * <p>Measured on 26.2: Forge adds {@code Gui.popLayer()} with a runtime patch that lands <b>after</b>
+     * the prepared class, and {@code Screen.onClose} (already compiled against it) then fails with
+     * {@code NoSuchMethodError}. Running last lets {@link #mergeInPlaceAdditions} see those additions and
+     * carry them over. 1.21.1 shows the same shape with {@code Direction.getUpdateOrder()}.
+     */
     @Override
     public TransformerVoteResult castVote(ITransformerVotingContext context) {
-        return pack.patched(context.getClassName()) != null
-                ? TransformerVoteResult.YES
-                : TransformerVoteResult.NO;
+        if (pack.patched(context.getClassName()) == null) return TransformerVoteResult.NO;
+        return Boolean.getBoolean("optiforge.deferVote")
+                ? TransformerVoteResult.DEFER
+                : TransformerVoteResult.YES;
     }
 
     @Override

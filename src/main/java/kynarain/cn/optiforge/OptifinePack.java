@@ -401,7 +401,7 @@ public final class OptifinePack {
         // applied to vanilla bytes brings the vanilla (private) flags back, which crashed the game
         // with IllegalAccessError from Forge's own ForgeRenderTypes. Replay those grants.
         int widened = 0;
-        ForgeAccessTransformers accessTransformers = ForgeAccessTransformers.load(remap, gameDir, notes);
+        ForgeAccessTransformers accessTransformers = ForgeAccessTransformers.load(remap, gameDir, mcVersion.startsWith("26."), notes);
         if (!accessTransformers.isEmpty()) {
             for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
                 byte[] updated = accessTransformers.transform(entry.getValue(), entry.getKey());
