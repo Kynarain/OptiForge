@@ -137,6 +137,10 @@ public final class OptiForgeService implements ITransformationService {
                     finish();
                     return null;
                 }
+                // Both versions have to be known *before* prepare(): the interface-availability index is
+                // built from this launch's Forge jars, and a later assignment left it without the version
+                // tag (measured: the index was skipped entirely on 1.21.7).
+                OptifinePack.forgeVersion = info == null ? "" : info.forgeVersion;
                 pack = OptifinePack.prepare(gameDir, optifineJar, baseJar, mapping, remapEnabled,
                         info == null ? "" : info.mcVersion, NOTES);
                 NOTES.append(pack.summary()).append('\n');

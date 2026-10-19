@@ -62,7 +62,8 @@ if (Test-Path $log) {
     $text = Get-Content $log
     "joined the game     : " + [bool]($text | Select-String -Pattern 'joined the game')
     "optifine lines      : " + ($text | Select-String -Pattern '\[OptiFine\]' | Measure-Object).Count
-    "forge version (OF)  : " + (($text | Select-String -Pattern '\[OptiFine\] Forge version:' | Select-Object -Last 1) -replace '^.*Forge version:', '').Trim()
+    $forgeLine = @($text | Select-String -Pattern '\[OptiFine\] Forge version:' | Select-Object -Last 1)[0]
+    "forge version (OF)  : " + (($forgeLine -as [string]) -replace '^.*Forge version:', '').Trim()
 }
 "crash reports       : " + (Get-ChildItem (Join-Path $GameDir 'crash-reports') -ErrorAction SilentlyContinue | Measure-Object).Count
 "pack                : " + ((Get-ChildItem (Join-Path $GameDir 'optiforge\pack') -Directory -ErrorAction SilentlyContinue).Name -join ', ')

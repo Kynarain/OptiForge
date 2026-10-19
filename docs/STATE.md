@@ -225,6 +225,28 @@ bypassed ImmediateWindowHandler.setupMinecraftWindow (arity changed on 26.x) x1`
 已确认该名字**不在**我们产出的任何 class、`own` 类、基包 jar、26.1.2 profile 的 40 个库里；
 需要下一步用 `-Xlog:class+load=info` 找到**正要被定义的那个类**（日志里 `class,load` 的那一行紧挨着报错），
 再看它为什么带上这个接口——大概率是 Forge 的 `minecraft` 模块读边问题（`forge` 模块不可读）。
+### 26.1.2 现在能到标题界面（本轮）
+
+两处修复叠加后，`26.1.2 + Forge 64.1.5 + OptiFine K1_pre2`（JDK 25）从"窗口创建前就崩"变成：
+
+    Setting user            : 1
+    Sound engine started    : 1
+    [OptiFine] lines        : 195
+    crash reports           : 0
+
+1. **窗口反射**：`Window` 里对 `ImmediateWindowHandler.setupMinecraftWindow` 的 4 参数反射调用改为返回 0，
+   回落到原版窗口创建（见上一节）。
+2. **摘掉运行时不存在的外部接口**（`ForgeInterfaces`）：OptiFine 26.x 的补丁会让 `VertexFormat`、
+   `PoseStack`、`GpuTexture`、`Font`、`GuiGraphics` 等 `implements net.minecraftforge.client.extensions.IForge*`，
+   而 Forge 64 的 jar 里**这些接口已经不存在**（1.21.x 的 universal 都还有）。做法：用"本次启动版本的
+   jar 集合"建一个类名索引，补丁类里凡是 `net/minecraftforge/**`、`net/neoforged/**` 的接口在索引里找不到就摘掉。
+   26.1.2 上摘掉 1 个类（`VertexFormat`），1.21.7 上索引 51952 个类、摘掉 0 个（接口都在，行为不变，回归通过）。
+
+   **注意**：索引必须限定在"本次启动的 Forge 版本"的 jar；一开始用了整个 rig 的 libraries，1.21.x 的 universal
+   让索引误报"存在"，结果在 1.21.7 上把真接口摘掉、直接把已验证的线弄坏（已修复并回归）。
+
+**进世界仍未达成**：世界开始加载（`world_gen_settings.dat` 读不到只是 NeoForge 的文件差异），但 200 秒内
+没出现 `joined the game`，像是卡在加载/生成阶段。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -357,6 +379,28 @@ bypassed ImmediateWindowHandler.setupMinecraftWindow (arity changed on 26.x) x1`
 已确认该名字**不在**我们产出的任何 class、`own` 类、基包 jar、26.1.2 profile 的 40 个库里；
 需要下一步用 `-Xlog:class+load=info` 找到**正要被定义的那个类**（日志里 `class,load` 的那一行紧挨着报错），
 再看它为什么带上这个接口——大概率是 Forge 的 `minecraft` 模块读边问题（`forge` 模块不可读）。
+### 26.1.2 现在能到标题界面（本轮）
+
+两处修复叠加后，`26.1.2 + Forge 64.1.5 + OptiFine K1_pre2`（JDK 25）从"窗口创建前就崩"变成：
+
+    Setting user            : 1
+    Sound engine started    : 1
+    [OptiFine] lines        : 195
+    crash reports           : 0
+
+1. **窗口反射**：`Window` 里对 `ImmediateWindowHandler.setupMinecraftWindow` 的 4 参数反射调用改为返回 0，
+   回落到原版窗口创建（见上一节）。
+2. **摘掉运行时不存在的外部接口**（`ForgeInterfaces`）：OptiFine 26.x 的补丁会让 `VertexFormat`、
+   `PoseStack`、`GpuTexture`、`Font`、`GuiGraphics` 等 `implements net.minecraftforge.client.extensions.IForge*`，
+   而 Forge 64 的 jar 里**这些接口已经不存在**（1.21.x 的 universal 都还有）。做法：用"本次启动版本的
+   jar 集合"建一个类名索引，补丁类里凡是 `net/minecraftforge/**`、`net/neoforged/**` 的接口在索引里找不到就摘掉。
+   26.1.2 上摘掉 1 个类（`VertexFormat`），1.21.7 上索引 51952 个类、摘掉 0 个（接口都在，行为不变，回归通过）。
+
+   **注意**：索引必须限定在"本次启动的 Forge 版本"的 jar；一开始用了整个 rig 的 libraries，1.21.x 的 universal
+   让索引误报"存在"，结果在 1.21.7 上把真接口摘掉、直接把已验证的线弄坏（已修复并回归）。
+
+**进世界仍未达成**：世界开始加载（`world_gen_settings.dat` 读不到只是 NeoForge 的文件差异），但 200 秒内
+没出现 `joined the game`，像是卡在加载/生成阶段。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

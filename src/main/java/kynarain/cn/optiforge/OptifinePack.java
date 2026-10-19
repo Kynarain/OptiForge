@@ -96,6 +96,7 @@ public final class OptifinePack {
 
     /** MC version of the current launch (set by the service before preparing); drives version-gated fixes. */
     public static volatile String mcVersion = "";
+    public static volatile String forgeVersion = "";
 
     /**
      * URL for one of OptiFine's own classes.
@@ -404,6 +405,33 @@ public final class OptifinePack {
         // calls it with four arguments (measured: wrong number of arguments: 4 expected: 5).
         boolean modernWindow = mcVersion != null && mcVersion.startsWith("26.");
         notes.append("modern window fix: ").append(modernWindow).append(" (mc=").append(mcVersion).append(")\n");
+        // OptiFine's payload can declare interfaces the running Forge does not have (measured on 26.1.2,
+        // where IForgeVertexFormat is gone from Forge 64). Dropping them is the only option: keeping them
+        // makes the class unloadable.
+        // Without both versions the tag cannot identify this launch's Forge jars, and a partial index would
+        // report real interfaces as absent (measured: it stripped IForgeVertexFormat on 1.21.7 and broke a
+        // verified line). Strip only when the launch versions are known.
+        boolean stripInterfaces = !mcVersion.isEmpty() && !forgeVersion.isEmpty();
+        String versionTag = stripInterfaces ? mcVersion + "-" + forgeVersion : "";
+        java.util.Set<String> available = stripInterfaces
+                ? ForgeInterfaces.availableClasses(gameDir, versionTag)
+                : java.util.Set.of();
+        int strippedInterfaces = 0;
+        for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
+            org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
+            new org.objectweb.asm.ClassReader(entry.getValue()).accept(node, 0);
+            var dropped = ForgeInterfaces.strip(node, available);
+            if (dropped.isEmpty()) continue;
+            org.objectweb.asm.ClassWriter writer = new org.objectweb.asm.ClassWriter(0);
+            node.accept(writer);
+            patched.put(entry.getKey(), writer.toByteArray());
+            strippedInterfaces++;
+            System.out.println("[OptiForge] dropped absent interface(s) " + dropped + " from " + entry.getKey());
+        }
+        notes.append(stripInterfaces
+                        ? "classpath index: " + available.size() + " classes; absent Forge interfaces dropped: "
+                                + strippedInterfaces + " class(es)\n"
+                        : "classpath index: skipped (launch versions unknown), no interface dropped\n");
         int compatFixed = 0;
         for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
             byte[] updated = CompatFixes.apply(entry.getValue(), entry.getKey(), modernWindow);
