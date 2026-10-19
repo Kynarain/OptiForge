@@ -53,24 +53,34 @@
 
 ## 没有做过（不要当成已实现）
 
-- `1.20.6`、`1.21.3/4/6/7/8/9/10/11`、`26.1.2`、`26.2` 都**没有**实测过；其中 `26.x` 的载荷是官方名、
-  可能是 no-op 管线，但未验证。
+- `1.20.6`、`1.21.3/4/6/7/8/9/10/11`、`26.1.2`、`26.2` 只有 `1.21.6` 与 `26.1.2` 试过（都失败，见下），其余没试。
 - `1.20.1` 的进世界没有复现（启动成功、世界未加载）；`1.21` 的进世界已复现。
 - 没有 CI；Gradle 构建仍未验证（javac 构建是验证过的）。
 
+## 本轮新测的两条线：同一类模块可见性失败
+
+| 组合 | 结果 | 关键错误 |
+|---|---|---|
+| 1.21.6 + Forge 56.0.9 + OptiFine `J6_pre3` | 失败 | `NoClassDefFoundError: net.minecraftforge.eventbus.api.Event`，抛点是 `net.optifine.reflect.Reflector.<clinit>`（我们的 mod 模块） |
+| 26.1.2 + Forge 64.1.5 + OptiFine `K1_pre2` | 失败 | `NoClassDefFoundError: net.minecraftforge.client.extensions.IForgeVertexFormat`，抛点是游戏类 `DefaultVertexFormat.<clinit>` |
+
+两条线都是"Forge 的类在交付上下文里不可见"：`1.21.6` 是 OptiFine 自有类所在的 mod 模块读不到 Forge 模块，
+`26.1.2` 是 `minecraft` 模块读不到 forge 模块（Forge 56/64 不再像 51 那样把这些读边提前补好）。
+
+另外 26.x 还有两个附带问题：Forge 64 需要 Java 25（本机只有 27，报 `Module.implAddExportsOrOpens` 缺失）；
+OptiFine 26.x 的 `Options.loadOfOptions` 在 `optionsof.txt` 缺失时 AIOOBE（从 rig 里复制一份可绕过），
+并且它要找 `optifine.OptiFineResourceLocator`——那在 jar 里 `optifine/**` 那一半，我们没有 stage。
+
 ## 下一步
 
-1. `1.20.1` 世界未加载的原因（`--quickPlaySingleplayer=RigSession` 已确认送达；疑似世界副本/超时）。
-2. 按同一管线刷 `1.21.4`、`1.21.8`、`1.21.11`（官方声明兼容，作为回归），再刷 `1.21.6`/`1.21.7`/`1.21.9`
-   与 `26.1.2`（N/A 线）。
-3. 出 `v0.2.0` 的 GitHub Release（jar + 说明：哪条线实测、OptiFine jar 放哪、已知限制）。
-
-## 下一步（M0，按顺序）
-
-1. 造一个 **1.21 + Forge 51.0.33** 的实例，把原件 `preview_OptiFine_1.21_HD_U_J1_pre9.jar` 与本 jar 一起放进
-   `mods/`，启动一次。产物：`optiforge/diagnose.txt` + `logs/latest.log`。
-2. 同一个实例里再跑**已声明兼容**的组合（1.21.1 + Forge 52.1.20 + `J1`）当对照，确认本 jar 不干扰成功路径。
-3. 用这两份日志给 M1 候选排序（DESIGN §6），再决定是 ASM 改常量、补 stub，还是别的。
+1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
+   `Module.addReads` 让它读 Forge 的模块；26.x 那侧要弄清 `minecraft` 模块为什么没读到 `forge`。
+2. 备选：让 OptiFine 自有类改走 `additionalClassesLocator`（落到**未命名模块**，能读所有模块），
+   staged mod 只留 assets。1.20.1 上验证过该接口会被调用（前缀带尾点即可），1.21.6 上待复测。
+3. stage OptiFine jar 的 `optifine/**`（launcher 侧）一半，补上 `OptiFineResourceLocator`。
+4. 用 Java 25 跑 26.x（本机需装 JDK 25）。
+5. `1.20.1` 世界未加载的原因（`--quickPlaySingleplayer=RigSession` 已确认送达；本轮已发现"世界目录被拍平到
+   saves/ 根"这一坑，修正后 1.21 复现成功，1.20.1 需重试）。
 
 ## 踩过的坑（写下来省一次重来）
 
