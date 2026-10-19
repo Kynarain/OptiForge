@@ -435,6 +435,17 @@ public final class OptifinePack {
         java.util.Set<String> available = stripInterfaces
                 ? ForgeInterfaces.availableClasses(gameDir, versionTag)
                 : java.util.Set.of();
+        visibleClasses = available;
+        // OptiFine 26.1.2 passes six arguments to fireRenderNameTagEvent while Forge ships five, so its
+        // reflector reports "exists" but returns null. Probe the real arity and bypass the call if it cannot match.
+        if (modernWindow && stripInterfaces) {
+            int arity = ForgeInterfaces.maxParameterCount(
+                    "net/minecraftforge/client/event/ForgeEventFactoryClient", "fireRenderNameTagEvent",
+                    gameDir, versionTag);
+            CompatFixes.bypassNameplateEvent = arity > 0 && arity < 6;
+            notes.append("nameplate event arity: ").append(arity)
+                    .append(CompatFixes.bypassNameplateEvent ? " (reflector bypassed)" : "").append('\n');
+        }
         int strippedInterfaces = 0;
         for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
             org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
@@ -511,6 +522,9 @@ public final class OptifinePack {
      * its assets, as a {@code FMLModType: LIBRARY} mod. No {@code META-INF/services} entry, so Forge
      * mounts it as a plain library and never treats it as a transformation service.
      */
+    /** Classes visible on this launch; used to decide which foreign class literals are safe to keep. */
+    private static volatile java.util.Set<String> visibleClasses = java.util.Set.of();
+
     private static void writeLibraryMod(Path gameDir, String key, Map<String, Path> own,
                                         Path optifineJar, StringBuilder notes) throws IOException {
         Path mods = gameDir.resolve("mods");
@@ -558,7 +572,8 @@ public final class OptifinePack {
             if (stageClasses) {
                 for (Map.Entry<String, Path> entry : own.entrySet()) {
                     String path = entry.getKey().replace('.', '/') + ".class";
-                    put(out, path, OwnRefs.apply(Files.readAllBytes(entry.getValue()), entry.getKey()));
+                    put(out, path, OwnRefs.apply(Files.readAllBytes(entry.getValue()), entry.getKey(),
+                            visibleClasses));
                     stagedClasses++;
                 }
             }

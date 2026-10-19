@@ -380,6 +380,24 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 26.1.2 在 loot 兜底后继续往前：现在崩在 `EntityRenderer.submitNameDisplay` 的
 `NullPointerException: renderNameplateEvent is null`（Forge 的 `HasResult`/`Result` 事件对象为空），
 下一轮就从这里继续。
+### 0.8.0：26.1.2 也干净通过（十条第 6 条 N/A）
+
+`26.1.2 + Forge 64.1.5 + OptiFine K1_pre2`（JDK 25）：`joined the game`、218 条 `[OptiFine]`、**0 崩溃**。
+
+它的最后一处是 `EntityRenderer.submitNameDisplay` 的
+`NullPointerException: renderNameplateEvent is null`：
+
+- OptiFine 26.1.2 的反射调用 `Reflector.ForgeEventFactoryClient_fireRenderNameTagEvent` **传 6 个参数**，
+  而 Forge 64 里的 `ForgeEventFactoryClient.fireRenderNameTagEvent` 只有 **5 个** → 反射器认为"方法存在"
+  但调用返回 null → NPE。
+- 修法：建包时用 ASM **实测该方法的参数个数**（`ForgeInterfaces.maxParameterCount`），
+  26.x 上 `arity < 6` 就把那段 `exists()` 判定改成 false，走原版名牌路径（判定前 `show`/`content` 已经算好）。
+  诊断里会打印 `nameplate event arity: 5 (reflector bypassed)`。
+- 顺带把 `OwnRefs`（中和外部类字面量）改成**只中和"本次启动的 jar 里不存在"的类**：之前一刀切导致 26.1.2
+  的 `ForgeEventFactoryClient` 字面量也被换成 `Object`。Event 这类真正读不到的仍然被中和（eventbus 是独立
+  artifact，不在索引里），所以 1.21 的修复不受影响——1.21 回归 `joined the game`、161 条、0 崩溃。
+
+26.2 同版复验：315 条 `[OptiFine]`、0 崩溃。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -667,6 +685,24 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 26.1.2 在 loot 兜底后继续往前：现在崩在 `EntityRenderer.submitNameDisplay` 的
 `NullPointerException: renderNameplateEvent is null`（Forge 的 `HasResult`/`Result` 事件对象为空），
 下一轮就从这里继续。
+### 0.8.0：26.1.2 也干净通过（十条第 6 条 N/A）
+
+`26.1.2 + Forge 64.1.5 + OptiFine K1_pre2`（JDK 25）：`joined the game`、218 条 `[OptiFine]`、**0 崩溃**。
+
+它的最后一处是 `EntityRenderer.submitNameDisplay` 的
+`NullPointerException: renderNameplateEvent is null`：
+
+- OptiFine 26.1.2 的反射调用 `Reflector.ForgeEventFactoryClient_fireRenderNameTagEvent` **传 6 个参数**，
+  而 Forge 64 里的 `ForgeEventFactoryClient.fireRenderNameTagEvent` 只有 **5 个** → 反射器认为"方法存在"
+  但调用返回 null → NPE。
+- 修法：建包时用 ASM **实测该方法的参数个数**（`ForgeInterfaces.maxParameterCount`），
+  26.x 上 `arity < 6` 就把那段 `exists()` 判定改成 false，走原版名牌路径（判定前 `show`/`content` 已经算好）。
+  诊断里会打印 `nameplate event arity: 5 (reflector bypassed)`。
+- 顺带把 `OwnRefs`（中和外部类字面量）改成**只中和"本次启动的 jar 里不存在"的类**：之前一刀切导致 26.1.2
+  的 `ForgeEventFactoryClient` 字面量也被换成 `Object`。Event 这类真正读不到的仍然被中和（eventbus 是独立
+  artifact，不在索引里），所以 1.21 的修复不受影响——1.21 回归 `joined the game`、161 条、0 崩溃。
+
+26.2 同版复验：315 条 `[OptiFine]`、0 崩溃。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

@@ -34,6 +34,9 @@ public final class CompatFixes {
     private static final String AO_WITH_ARGS =
             "(Lnet/minecraft/world/level/block/state/BlockState;Lnet/minecraft/client/renderer/RenderType;)Z";
 
+    /** Set when OptiFine's reflective call cannot match the running Forge's method arity. */
+    static volatile boolean bypassNameplateEvent;
+
     private CompatFixes() {
     }
 
@@ -89,6 +92,9 @@ public final class CompatFixes {
         }
         if (modernWindow) {
             window = bypassImmediateWindowHandler(node, dottedClassName);
+        }
+        if (bypassNameplateEvent && dottedClassName.equals("net.minecraft.client.renderer.entity.EntityRenderer")) {
+            window += bypassNameplateEvent(node);
         }
         if (rewritten == 0 && ambient == 0 && window == 0) return classBytes;
         if (rewritten > 0) {
@@ -146,6 +152,40 @@ public final class CompatFixes {
                     afterSetupField = false;
                 }
             }
+        }
+        return changed;
+    }
+
+    /**
+     * Makes {@code Reflector.ForgeEventFactoryClient_fireRenderNameTagEvent.exists()} answer false.
+     *
+     * <p>Measured on 26.1.2: OptiFine passes six arguments, Forge's method takes five, so {@code exists()} is
+     * true while the call returns null and {@code EntityRenderer.submitNameDisplay} throws
+     * "NullPointerException: renderNameplateEvent is null". Skipping the block keeps the vanilla nameplate
+     * path, whose state (show flag and text) is already computed just before it.
+     */
+    private static int bypassNameplateEvent(ClassNode node) {
+        int changed = 0;
+        for (MethodNode method : node.methods) {
+            boolean afterField = false;
+            for (AbstractInsnNode instruction : method.instructions) {
+                if (instruction instanceof FieldInsnNode field
+                        && "net/optifine/reflect/Reflector".equals(field.owner)
+                        && field.name.contains("fireRenderNameTagEvent")) {
+                    afterField = true;
+                    continue;
+                }
+                if (!afterField) continue;
+                if (instruction instanceof MethodInsnNode call && "exists".equals(call.name)) {
+                    method.instructions.insertBefore(instruction, new InsnNode(Opcodes.POP));
+                    method.instructions.set(instruction, new InsnNode(Opcodes.ICONST_0));
+                    changed++;
+                    afterField = false;
+                }
+            }
+        }
+        if (changed > 0) {
+            System.out.println("[OptiForge] bypassed the nameplate event reflector (arity mismatch) x" + changed);
         }
         return changed;
     }}

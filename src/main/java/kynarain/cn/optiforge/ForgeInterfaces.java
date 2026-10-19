@@ -79,4 +79,40 @@ public final class ForgeInterfaces {
     public static String describe(Set<String> available) {
         return "classpath index: " + available.size() + " classes";
     }
-}
+
+    /**
+     * Largest parameter count of {@code name} on {@code owner} across this launch"s jars, or -1 when the class
+     * or method is absent.
+     *
+     * <p>Used to decide whether OptiFine"s reflective call can succeed: on 26.1.2 its
+     * {@code Reflector.ForgeEventFactoryClient_fireRenderNameTagEvent} passes six arguments while Forge"s
+     * method takes five, so the reflector reports the method as existing but returns null, and
+     * {@code EntityRenderer.submitNameDisplay} dies on the null event.
+     */
+    public static int maxParameterCount(String ownerInternal, String methodName, Path gameDir,
+                                        String versionTag) {
+        int best = -1;
+        for (Path jar : LaunchPaths.jars(gameDir)) {
+            String path = jar.toString().replace('\\', '/');
+            if (versionTag != null && !versionTag.isBlank()
+                    && path.contains("/net/minecraftforge/forge/")
+                    && !path.contains("/" + versionTag + "/")) {
+                continue;
+            }
+            try (ZipFile zip = new ZipFile(jar.toFile())) {
+                ZipEntry entry = zip.getEntry(ownerInternal + ".class");
+                if (entry == null) continue;
+                try (var in = zip.getInputStream(entry)) {
+                    org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
+                    new org.objectweb.asm.ClassReader(in).accept(node, 0);
+                    for (org.objectweb.asm.tree.MethodNode method : node.methods) {
+                        if (!method.name.equals(methodName)) continue;
+                        best = Math.max(best, org.objectweb.asm.Type.getArgumentTypes(method.desc).length);
+                    }
+                }
+            } catch (IOException ignored) {
+                // a jar we cannot read contributes nothing
+            }
+        }
+        return best;
+    }}

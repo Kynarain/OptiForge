@@ -32,6 +32,18 @@ public final class OwnRefs {
 
     /** @return bytes with foreign class literals neutralised, or the input when there is nothing to do */
     public static byte[] apply(byte[] classBytes, String dottedClassName) {
+        return apply(classBytes, dottedClassName, java.util.Set.of());
+    }
+
+    /**
+     * @param visible classes present in this launch' jars - a literal for one of those must be kept, because
+     *                OptiFine's {@code Reflector} resolves the Forge API through them. Measured on 26.1.2:
+     *                replacing every {@code net/minecraftforge/**} literal broke
+     *                {@code Reflector.ForgeEventFactoryClient_fireRenderNameTagEvent} (the call returned null and
+     *                {@code EntityRenderer.submitNameDisplay} died with
+     *                "NullPointerException: renderNameplateEvent is null").
+     */
+    public static byte[] apply(byte[] classBytes, String dottedClassName, java.util.Set<String> visible) {
         ClassNode node = new ClassNode();
         new org.objectweb.asm.ClassReader(classBytes).accept(node, 0);
 
@@ -45,6 +57,7 @@ public final class OwnRefs {
                 if (!internal.startsWith("net/minecraftforge/") && !internal.startsWith("net/neoforged/")) {
                     continue;
                 }
+                if (visible.contains(internal)) continue; // the class is reachable, keep the reference
                 ldc.cst = Type.getType(Object.class);
                 rewritten++;
             }
