@@ -363,6 +363,23 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 - 结果：**26.2 的 `popLayer` 错误消失**，进世界后剩下的唯一崩溃就是与 26.1.2 相同的
   `LootModifierManager` 时序断言——**两条 26.x 线现在收敛到同一个问题**。
 - 回归：1.21.7 这条规则不触发（无 `adopting superclass` 日志），仍 `joined the game`、0 崩溃。
+### 0.7.0：26.2（N/A）也干净通过（2026-10-20）
+
+`26.2 + Forge 65.1.5 + OptiFine K2_pre4`（JDK 25）：`Setting user`、`Sound engine started`、
+**`Dev joined the game`**、200 条 `[OptiFine]`、**0 崩溃报告**。
+
+这一步靠两个修复：
+
+1. **父类被补丁改回 Object**（上一轮）：`Gui extends ForgeLayerInstance` 被 OptiFine 的补丁写回 `Object`，
+   合并时采纳入参父类并重写构造器 `super` 调用。
+2. **loot 管理器时序兜底**（本轮，`RuntimePatches`）：26.x 上集成服务器会在资源重载完成前 tick，
+   `ForgeHooks.modifyLoot` 调 `ForgeInternalHandler.getLootModifierManager()` 抛断言。
+   给这个方法加 `catch (Throwable)` → 返回未修改的掉落物；管理器在时行为不变，不在时掉落物只是不经过
+   全局 loot modifier，而不是把世界打死。仅 26.x 启用。
+
+26.1.2 在 loot 兜底后继续往前：现在崩在 `EntityRenderer.submitNameDisplay` 的
+`NullPointerException: renderNameplateEvent is null`（Forge 的 `HasResult`/`Result` 事件对象为空），
+下一轮就从这里继续。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -633,6 +650,23 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 - 结果：**26.2 的 `popLayer` 错误消失**，进世界后剩下的唯一崩溃就是与 26.1.2 相同的
   `LootModifierManager` 时序断言——**两条 26.x 线现在收敛到同一个问题**。
 - 回归：1.21.7 这条规则不触发（无 `adopting superclass` 日志），仍 `joined the game`、0 崩溃。
+### 0.7.0：26.2（N/A）也干净通过（2026-10-20）
+
+`26.2 + Forge 65.1.5 + OptiFine K2_pre4`（JDK 25）：`Setting user`、`Sound engine started`、
+**`Dev joined the game`**、200 条 `[OptiFine]`、**0 崩溃报告**。
+
+这一步靠两个修复：
+
+1. **父类被补丁改回 Object**（上一轮）：`Gui extends ForgeLayerInstance` 被 OptiFine 的补丁写回 `Object`，
+   合并时采纳入参父类并重写构造器 `super` 调用。
+2. **loot 管理器时序兜底**（本轮，`RuntimePatches`）：26.x 上集成服务器会在资源重载完成前 tick，
+   `ForgeHooks.modifyLoot` 调 `ForgeInternalHandler.getLootModifierManager()` 抛断言。
+   给这个方法加 `catch (Throwable)` → 返回未修改的掉落物；管理器在时行为不变，不在时掉落物只是不经过
+   全局 loot modifier，而不是把世界打死。仅 26.x 启用。
+
+26.1.2 在 loot 兜底后继续往前：现在崩在 `EntityRenderer.submitNameDisplay` 的
+`NullPointerException: renderNameplateEvent is null`（Forge 的 `HasResult`/`Result` 事件对象为空），
+下一轮就从这里继续。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

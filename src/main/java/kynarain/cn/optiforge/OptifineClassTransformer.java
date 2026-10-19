@@ -26,10 +26,18 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
     private final Set<Target> targets;
     private int applied;
 
+    private final boolean modern;
+    private final Set<String> runtimePatched;
+
     public OptifineClassTransformer(OptifinePack pack) {
         this.pack = pack;
+        this.modern = OptifinePack.mcVersion != null && OptifinePack.mcVersion.startsWith("26.");
+        this.runtimePatched = RuntimePatches.targets(modern);
         Set<Target> set = new LinkedHashSet<>();
         for (String className : pack.patchedClasses.keySet()) {
+            set.add(Target.targetPreClass(className));
+        }
+        for (String className : runtimePatched) {
             set.add(Target.targetPreClass(className));
         }
         this.targets = Set.copyOf(set);
@@ -39,6 +47,8 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
     public ClassNode transform(ClassNode input, ITransformerVotingContext context) {
         // the game module only exists once classes are being transformed
         OptiForgeService.ensureModuleReads();
+        ClassNode patchedForge = RuntimePatches.apply(input, modern);
+        if (patchedForge != null) return patchedForge;
         byte[] prepared = pack.patched(context.getClassName());
         if (prepared == null) return input;
         ClassNode node = new ClassNode();
@@ -188,7 +198,10 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
      */
     @Override
     public TransformerVoteResult castVote(ITransformerVotingContext context) {
-        if (pack.patched(context.getClassName()) == null) return TransformerVoteResult.NO;
+        if (pack.patched(context.getClassName()) == null
+                && !runtimePatched.contains(context.getClassName())) {
+            return TransformerVoteResult.NO;
+        }
         return Boolean.getBoolean("optiforge.deferVote")
                 ? TransformerVoteResult.DEFER
                 : TransformerVoteResult.YES;
