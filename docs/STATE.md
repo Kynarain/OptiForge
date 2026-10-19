@@ -34,17 +34,18 @@
 
 1. ~~生成 `1.21` 的 `SRG 名 → 官方名` 全局表~~ —— 完成，75 196 行。
 2. ~~实现重映射~~ —— `SrgRemap` 已能在离线把补丁产物改成官方名（已验证 `CrashReport`）。
-3. **把它接到服务里**：OptiFine 自己的 transformer 会先跑（真机已证明），但它的产物在官方名运行时上
-   需要重映射。有两条待验路径：
-   a. 让 OptiFine 的 transformer 继续跑，OptiForge 注册一个**排在它之后**的 `ITransformer` 重映射它的目标类
-      —— 需要确认 ModLauncher 的服务排序（日志里 `[optiforge, mixin, OptiFine, fml]` 的顺序是否就是执行序），
-      以及 `net/optifine/**` 自有类（由 OptiFine 的 `additionalClassesLocator` 提供，我们碰不到）怎么办；
-   b. 自己接管：把 OptiFine jar 放到 `mods/` 之外，由 OptiForge 用 `OptifinePatcher` 打补丁 + `SrgRemap`
-      重映射，再通过自己的 `ITransformationService`（`transformers()` + `additionalClassesLocator()`）提供 ——
-      与 OptiFabric 同构，工作量更大但不依赖 OptiFine 的 transformer 行为。
+3. **把它接到服务里**。方案已由实测定死：走**接管**（OptiFabric 同构），不做"只在 OptiFine 之后加
+   transformer"——因为 `1.21` 的 346 个 `srg/net/optifine/**` 类本身带 SRG 引用，而它们是经 OptiFine 的
+   `additionalClassesLocator()` 直接进类加载器的，**不过 transformer**（DESIGN §4.3）。具体：
+   1. OptiFine jar 移到 `mods/` 之外（例如实例目录下 `optiforge/OptiFine_*.jar`）；
+   2. 启动时 `OptifinePatcher` 打补丁、`SrgRemap` 重映射，结果按 `sha256(jar)+mc+forge` 缓存；
+   3. `transformers()` 交付打过补丁的游戏类，`additionalClassesLocator()` 交付重映射后的 `net/optifine/**`，
+      `additionalResourcesLocator()` 交付 `assets/**`；
+   4. 打补丁需要的基包（原版客户端 jar）从 classpath 里找 `versions/<mc>/<mc>.jar`，找不到就用
+      `-Doptiforge.vanilla=` 指定。
 4. 用同一套 rig 复跑 `1.21 + Forge 51.0.33 + J1_pre9`，验收信号与 1.21.1 一致：
    `Setting user`、`Sound engine started`、`joined`、0 崩溃报告。
-5. 再按同一方法测 `1.21.6` / `1.21.7`（若载荷同为 SRG，则同一处修法覆盖）。
+5. 再按同一方法测 `1.21.6` / `1.21.7`（载荷是官方名，本该不需要重映射——N/A 的原因可能是别的，需要实测）。
 
 ## 下一步（M0，按顺序）
 

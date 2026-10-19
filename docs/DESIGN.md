@@ -134,15 +134,28 @@ OptiFine 的每一份构建都带 `META-INF/services/cpw.mods.modlauncher.api.IT
 
 ### 4.3 由此确定的 M1
 
-对"载荷命名空间 ≠ 运行时命名空间"的线（目前确认 `1.21`；`1.21.6`/`1.21.7` 等未测），修法是
-**加一层成员重映射**，而不是重写 OptiFine 的补丁管线：
+先要回答一个会把方案分叉的问题：**OptiFine 自己的类（`srg/net/optifine/**`）要不要一起重映射？**
+实测（`srg/net/optifine/*.class` 里出现 `[fm]_\d+_` 的类数）：
 
-- OptiFine 自己的 transformer 继续负责打补丁、提供 `net/optifine/**` 与资源（真机已证明它能跑）；
-- OptiForge 注册一个**排在它之后**的 transformer，把经过它的类里的 SRG 成员名换成官方名；
-- SRG 记号（`f_127499_` / `m_127521_`）是**全局唯一**的，所以重命名不需要 owner 上下文 ——
-  一个 `SRG 名 → 官方名` 的全局表就够；
-- 映射来源：`joined.tsrg`（`obf ↔ srg`，Forge 的 `mcp_config-<mc>.zip` 里，格式 `tsrg2 obf srg id`）
-  与 Mojang 的 `client.txt`（`official ↔ obf`）按混淆名 join。
+| 构建 | 自有类 | 含 SRG 记号的类 | SRG 记号数 |
+|---|---|---|---|
+| `1.21` `J1_pre9` | 658 | **346** | **2818** |
+| `1.21.1` `J1` | 660 | 1 | 4 |
+| `1.20.6` `J1_pre18` | 657 | 1 | 4 |
+
+（1.21.1/1.20.6 的那 1 个类 4 个记号是巧合字符串，不影响结论。）也就是说 `1.21` 的**自有类有半数是 SRG 命名**。
+
+结论直接改变方案：
+
+- **只加一个"排在 OptiFine 之后"的 `ITransformer` 不够**。transformer 只看得到被 transform 的目标类，
+  而 OptiFine 的自有类是通过它的 `additionalClassesLocator()`（日志里 `[optifine., net.optifine.]`）
+  直接交给类加载器的，**不过 transformer**。346 个类里的 SRG 引用会照旧炸。
+- 因此 M1 走**接管**（与 OptiFabric 同构）：OptiFine jar 不放在 `mods/`，由 OptiForge 自己
+  1. 用 `OptifinePatcher` 打补丁（已实现、已验证 MD5 匹配）；
+  2. 用 `SrgRemap` 把补丁产物与自有类一起重映射（已实现、已在 `CrashReport` 上验证）；
+  3. 通过自己的 `ITransformationService` 提供：目标类走 `transformers()`，自有类走
+     `additionalClassesLocator()`，资源走 `additionalResourcesLocator()`。
+- 对"载荷本来就是官方名"的线（`1.20.6`+、`26.x`），第 2 步是 no-op，同一套管线通用。
 
 ## 5. 兼容表：语义与边界
 
