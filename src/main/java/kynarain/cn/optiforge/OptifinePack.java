@@ -549,7 +549,13 @@ public final class OptifinePack {
     // ---- cache ----
 
     /** Bumped whenever the pack contents change shape, so stale caches are never reused. */
-    private static final String PACK_VERSION = "v2";
+    /**
+     * Bump when anything about <b>preparation</b> changes (remap, collision handling, AT replay, compat
+     * fixes, own-class processing). The key only hashes the input jars, so without this a pack built by an
+     * older OptiForge kept being reused and new fixes silently never ran - measured on 26.1.2, whose pack
+     * still dated from before OwnRefs existed.
+     */
+    private static final String PACK_VERSION = "v3";
 
     private static String key(Path optifineJar, Path baseJar) {
         String a = hashFile(optifineJar, 16);

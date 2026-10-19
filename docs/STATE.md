@@ -168,6 +168,24 @@ rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area:
   （大概率是 forge 的 mixin 配置），确认它在我们之后运行却没生效的原因；或直接由 OptiForge
   按"类名 → 应实现的接口"补上（先只补这一个）。另需照旧补 `optifine/**` 的
   `OptiFineResourceLocator`（26.x 的 Reflector 报 "Class not present"）。
+### 本轮发现的两个"验收集成"问题（重要）
+
+1. **实例 `mods/` 里的旧 OptiForge jar 会被一起加载**：每次测试都把新 jar 拷进去，但旧的
+   `OptiForge-0.2.0.jar` 一直在，Forge 会把两个都加载，实际跑的是**旧代码**（表现为 pack 目录名一直是
+   `v2-…`，而源码已经是 v3）。**从今以后每次启动前清掉除被测 jar 之外的所有 `OptiForge-*.jar`。**
+2. **pack 缓存键只看输入 jar 的哈希**，不含"处理逻辑版本"，所以旧缓存会被无限复用——`OwnRefs`、
+   类级 AT、`CompatFixes` 这些包构建期的修复在旧缓存上**根本没跑过**。已把
+   `PACK_VERSION` 提到 `v3`（改处理逻辑时必须再提）。
+
+这两点意味着：**上一轮 1.21.7 / 1.21.8 / 1.21.9 / 1.21.10 / 1.21.11 的"进世界"需要在干净环境下重验**
+（1.21 与 1.21.6 已用干净环境重验通过）。
+
+### `mergeInPlaceAdditions` 的坑
+
+为了不丢别的 transformer 已加到类上的接口/成员，transform 现在把入参里多出来的接口/方法/字段并进结果。
+第一版把**原版的 `<clinit>`** 也并了进来，而 OptiFine 有时把原版静态字段改成实例字段
+（`BreezeWindLayer.TEXTURE_LOCATION`），于是 `IncompatibleClassChangeError: Expected static field`。
+现在**跳过 `<clinit>`/`<init>`**，1.21 与 1.21.6 干净环境下均通过。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -243,6 +261,24 @@ rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area:
   （大概率是 forge 的 mixin 配置），确认它在我们之后运行却没生效的原因；或直接由 OptiForge
   按"类名 → 应实现的接口"补上（先只补这一个）。另需照旧补 `optifine/**` 的
   `OptiFineResourceLocator`（26.x 的 Reflector 报 "Class not present"）。
+### 本轮发现的两个"验收集成"问题（重要）
+
+1. **实例 `mods/` 里的旧 OptiForge jar 会被一起加载**：每次测试都把新 jar 拷进去，但旧的
+   `OptiForge-0.2.0.jar` 一直在，Forge 会把两个都加载，实际跑的是**旧代码**（表现为 pack 目录名一直是
+   `v2-…`，而源码已经是 v3）。**从今以后每次启动前清掉除被测 jar 之外的所有 `OptiForge-*.jar`。**
+2. **pack 缓存键只看输入 jar 的哈希**，不含"处理逻辑版本"，所以旧缓存会被无限复用——`OwnRefs`、
+   类级 AT、`CompatFixes` 这些包构建期的修复在旧缓存上**根本没跑过**。已把
+   `PACK_VERSION` 提到 `v3`（改处理逻辑时必须再提）。
+
+这两点意味着：**上一轮 1.21.7 / 1.21.8 / 1.21.9 / 1.21.10 / 1.21.11 的"进世界"需要在干净环境下重验**
+（1.21 与 1.21.6 已用干净环境重验通过）。
+
+### `mergeInPlaceAdditions` 的坑
+
+为了不丢别的 transformer 已加到类上的接口/成员，transform 现在把入参里多出来的接口/方法/字段并进结果。
+第一版把**原版的 `<clinit>`** 也并了进来，而 OptiFine 有时把原版静态字段改成实例字段
+（`BreezeWindLayer.TEXTURE_LOCATION`），于是 `IncompatibleClassChangeError: Expected static field`。
+现在**跳过 `<clinit>`/`<init>`**，1.21 与 1.21.6 干净环境下均通过。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

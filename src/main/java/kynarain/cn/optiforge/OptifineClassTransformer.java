@@ -43,6 +43,7 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         if (prepared == null) return input;
         ClassNode node = new ClassNode();
         new ClassReader(prepared).accept(node, 0);
+        reportAdditions(input, node, context.getClassName());
         mergeInPlaceAdditions(input, node);
         applied++;
         return node;
@@ -69,6 +70,11 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
             methods.add(method.name + method.desc);
         }
         for (org.objectweb.asm.tree.MethodNode method : incoming.methods) {
+            // Never carry over initialisers. OptiFine's payload sometimes turns a vanilla static field
+            // into an instance field (BreezeWindLayer.TEXTURE_LOCATION is the measured case); bringing the
+            // vanilla <clinit> along then produced "IncompatibleClassChangeError: Expected static field"
+            // on the first launch that used the merged class.
+            if (method.name.equals("<clinit>") || method.name.equals("<init>")) continue;
             if (methods.add(method.name + method.desc)) prepared.methods.add(method);
         }
         java.util.Set<String> fields = new java.util.HashSet<>();
@@ -104,4 +110,20 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
     public Map<String, byte[]> prepared() {
         return pack.patchedClasses;
     }
-}
+
+    /** Diagnostic: names what the incoming node carries beyond the prepared class (see mergeInPlaceAdditions). */
+    private static void reportAdditions(ClassNode incoming, ClassNode prepared, String className) {
+        if (incoming == null || !Boolean.getBoolean("optiforge.mergeLog")) return;
+        StringBuilder extra = new StringBuilder();
+        for (String itf : incoming.interfaces) {
+            if (!prepared.interfaces.contains(itf)) extra.append("interface ").append(itf).append(' ');
+        }
+        java.util.Set<String> mine = new java.util.HashSet<>();
+        for (org.objectweb.asm.tree.MethodNode method : prepared.methods) mine.add(method.name + method.desc);
+        for (org.objectweb.asm.tree.MethodNode method : incoming.methods) {
+            if (mine.add(method.name + method.desc)) extra.append("method ").append(method.name).append(' ');
+        }
+        if (extra.length() > 0) {
+            System.out.println("[OptiForge] incoming additions for " + className + ": " + extra);
+        }
+    }}
