@@ -132,6 +132,23 @@ OptiFine 26.x 的 `Options.loadOfOptions` 在 `optionsof.txt` 缺失时 AIOOBE�
 **运行时**才加上去的，而我们用 OptiFine 的补丁整类替换后丢掉了它。下一步：要么让 Forge 的补丁再叠加一次
 （确认它是不是 Mixin/transformer），要么在 `OwnRefs` 之外加一遍"保留 Forge 后加成员"的处理
 （例如从 Forge 的 client jar 里取同名类做成员并集）。
+### 0.5.0：七条 1.21.x 线全部实测通过（2026-10-20）
+
+| MC | Forge | OptiFine | 官方 Forge 列 | 启动 | 进世界 |
+|---|---|---|---|---|---|
+| 1.21 | 51.0.33 | `J1_pre9` | N/A | 是 | 是 |
+| 1.21.6 | 56.0.9 | `J6_pre3` | N/A | 是 | 是 |
+| 1.21.7 | 57.0.3 | `J6_pre7` | N/A | 是 | 是 |
+| 1.21.8 | 58.1.26 | `J6_pre13` | 兼容 | 是 | 是 |
+| 1.21.9 | 59.0.5 | `J7_pre2` | N/A | 是 | 是 |
+| 1.21.10 | 60.1.18 | `J7_pre9` | 兼容 | 是 | 是 |
+| 1.21.11 | 61.2.4 | `J9_pre4` | 兼容 | 是 | 是 |
+
+每条都是 `Setting user` + `Sound engine started` + `Dev joined the game` + 0 崩溃报告 + stderr 0 字节，
+OptiFine 自己打印对应的 `Forge version:`。1.21.7/8/9/10/11 都**不需要新增兼容补丁**，说明管线本身是稳的。
+
+rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area: 51%` 卡住，换同实例的
+`CaptureWorld`（3.8 MB）秒进——卡的是世界不是加载器。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -171,6 +188,23 @@ OptiFine 26.x 的 `Options.loadOfOptions` 在 `optionsof.txt` 缺失时 AIOOBE�
 **运行时**才加上去的，而我们用 OptiFine 的补丁整类替换后丢掉了它。下一步：要么让 Forge 的补丁再叠加一次
 （确认它是不是 Mixin/transformer），要么在 `OwnRefs` 之外加一遍"保留 Forge 后加成员"的处理
 （例如从 Forge 的 client jar 里取同名类做成员并集）。
+### 0.5.0：七条 1.21.x 线全部实测通过（2026-10-20）
+
+| MC | Forge | OptiFine | 官方 Forge 列 | 启动 | 进世界 |
+|---|---|---|---|---|---|
+| 1.21 | 51.0.33 | `J1_pre9` | N/A | 是 | 是 |
+| 1.21.6 | 56.0.9 | `J6_pre3` | N/A | 是 | 是 |
+| 1.21.7 | 57.0.3 | `J6_pre7` | N/A | 是 | 是 |
+| 1.21.8 | 58.1.26 | `J6_pre13` | 兼容 | 是 | 是 |
+| 1.21.9 | 59.0.5 | `J7_pre2` | N/A | 是 | 是 |
+| 1.21.10 | 60.1.18 | `J7_pre9` | 兼容 | 是 | 是 |
+| 1.21.11 | 61.2.4 | `J9_pre4` | 兼容 | 是 | 是 |
+
+每条都是 `Setting user` + `Sound engine started` + `Dev joined the game` + 0 崩溃报告 + stderr 0 字节，
+OptiFine 自己打印对应的 `Forge version:`。1.21.7/8/9/10/11 都**不需要新增兼容补丁**，说明管线本身是稳的。
+
+rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area: 51%` 卡住，换同实例的
+`CaptureWorld`（3.8 MB）秒进——卡的是世界不是加载器。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
