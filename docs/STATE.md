@@ -102,7 +102,37 @@ OptiFine 26.x 的 `Options.loadOfOptions` 在 `optionsof.txt` 缺失时 AIOOBE�
 - `additionalClassesLocator` 在 Forge 51/56 的 ForgeBootstrap 启动下**从未被调用**（两代日志都没有
   `additionalClassesLocator() requested`）。
 
-### 下一步（模块可见性）
+#### 突破：1.21.6（N/A）现在能启动（2026-10-20）
+
+两处修复让 `1.21.6 + Forge 56.0.9 + OptiFine J6_pre3` 从"启动即死"变成
+**`Setting user` + `Sound engine started` + 250 条 `[OptiFine]` + 0 崩溃报告 + stderr 0 字节**
+（OptiFine 自己报 `Forge version: 56.0.9`）。
+
+1. **`OwnRefs`**：把 OptiFine 自有类里对 `net/minecraftforge/**`、`net/neoforged/**` 的**类字面量**
+   （`ldc Type`）换成 `Object.class`。1.21.6 的自有类里只有 3 个文件提到 Forge，致命的是
+   `net.optifine.reflect.Reflector` 里对 `net.minecraftforge.eventbus.api.Event` 的类字面量——
+   模块读边拿不到，就干脆不要硬链接（OptiFine 的 Reflector 本来就"类不存在"当正常情况）。
+2. **`ForgeAccessTransformers` 漏了类级 AT**：Forge 的 cfg 里有 `public a.b.C` 这种只有两个 token 的行，
+   之前用 `parts.length < 3` 直接跳过，于是 `ModelDiscovery$ModelWrapper` 没被 public 化，
+   报 `IllegalAccessError: failed to access class ... from class ModelContext`。
+   现在类级授权也会应用（1.21 上 AT 授权数 335 → 392，重放到的类 21 → 39，回归通过）。
+
+1.21 回归：`Dev joined the game`、0 崩溃、161 条 `[OptiFine]`，确认没有副作用。
+
+### 1.21.6 进世界的下一个阻塞
+
+进世界时 `Dev joined the game` 已出现，随后崩溃：
+
+    NoSuchMethodError: 'boolean BlockModelPart.useAmbientOcclusion(BlockState, RenderType)'
+      at ModelBlockRenderer.renderModel
+      at ModelBlockRenderer.tesselateBlock
+
+我们替换的 `BlockModelPart`（来自 OptiFine 载荷，`extends IForgeBlockModelPart`）只有
+`useAmbientOcclusion()`，没有 Forge 那个带 `(BlockState, RenderType)` 的重载——说明该重载是 Forge
+**运行时**才加上去的，而我们用 OptiFine 的补丁整类替换后丢掉了它。下一步：要么让 Forge 的补丁再叠加一次
+（确认它是不是 Mixin/transformer），要么在 `OwnRefs` 之外加一遍"保留 Forge 后加成员"的处理
+（例如从 Forge 的 client jar 里取同名类做成员并集）。
+## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
    `net/minecraftforge/**`、`net/neoforged/**` 的类字面量（`LDC Type`）换成
@@ -111,6 +141,36 @@ OptiFine 26.x 的 `Options.loadOfOptions` 在 `optionsof.txt` 缺失时 AIOOBE�
 2. 或者让 staged jar 走 SERVICE 层（classpath 上的变换服务 jar），避开 mod 层的读边限制——但要注意
    之前的 split package/export 报错。
 3. 26.x 还有 Java 25、`optionsof.txt`、`optifine/**`（`OptiFineResourceLocator`）三件事。
+### 突破：1.21.6（N/A）现在能启动（2026-10-20）
+
+两处修复让 `1.21.6 + Forge 56.0.9 + OptiFine J6_pre3` 从"启动即死"变成
+**`Setting user` + `Sound engine started` + 250 条 `[OptiFine]` + 0 崩溃报告 + stderr 0 字节**
+（OptiFine 自己报 `Forge version: 56.0.9`）。
+
+1. **`OwnRefs`**：把 OptiFine 自有类里对 `net/minecraftforge/**`、`net/neoforged/**` 的**类字面量**
+   （`ldc Type`）换成 `Object.class`。1.21.6 的自有类里只有 3 个文件提到 Forge，致命的是
+   `net.optifine.reflect.Reflector` 里对 `net.minecraftforge.eventbus.api.Event` 的类字面量——
+   模块读边拿不到，就干脆不要硬链接（OptiFine 的 Reflector 本来就"类不存在"当正常情况）。
+2. **`ForgeAccessTransformers` 漏了类级 AT**：Forge 的 cfg 里有 `public a.b.C` 这种只有两个 token 的行，
+   之前用 `parts.length < 3` 直接跳过，于是 `ModelDiscovery$ModelWrapper` 没被 public 化，
+   报 `IllegalAccessError: failed to access class ... from class ModelContext`。
+   现在类级授权也会应用（1.21 上 AT 授权数 335 → 392，重放到的类 21 → 39，回归通过）。
+
+1.21 回归：`Dev joined the game`、0 崩溃、161 条 `[OptiFine]`，确认没有副作用。
+
+### 1.21.6 进世界的下一个阻塞
+
+进世界时 `Dev joined the game` 已出现，随后崩溃：
+
+    NoSuchMethodError: 'boolean BlockModelPart.useAmbientOcclusion(BlockState, RenderType)'
+      at ModelBlockRenderer.renderModel
+      at ModelBlockRenderer.tesselateBlock
+
+我们替换的 `BlockModelPart`（来自 OptiFine 载荷，`extends IForgeBlockModelPart`）只有
+`useAmbientOcclusion()`，没有 Forge 那个带 `(BlockState, RenderType)` 的重载——说明该重载是 Forge
+**运行时**才加上去的，而我们用 OptiFine 的补丁整类替换后丢掉了它。下一步：要么让 Forge 的补丁再叠加一次
+（确认它是不是 Mixin/transformer），要么在 `OwnRefs` 之外加一遍"保留 Forge 后加成员"的处理
+（例如从 Forge 的 client jar 里取同名类做成员并集）。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

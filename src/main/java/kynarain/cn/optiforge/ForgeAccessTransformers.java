@@ -84,6 +84,26 @@ public final class ForgeAccessTransformers {
             if (comment >= 0) line = line.substring(0, comment).trim();
             if (line.isEmpty()) continue;
             String[] parts = line.split("\\s+");
+            // A class-level line is "public a.b.C" - only two tokens. Skipping those (parts.length < 3)
+            // left Forge's own access transformers that make a *class* public unapplied, and 1.21.6 died
+            // with "IllegalAccessError: failed to access class ModelDiscovery$ModelWrapper from class
+            // ModelContext", because Forge declares "public net.minecraft...ModelDiscovery$ModelWrapper".
+            if (parts.length == 2) {
+                String accessName = parts[0];
+                int access = switch (accessName) {
+                    case "public", "public-f" -> Opcodes.ACC_PUBLIC;
+                    case "protected", "protected-f" -> Opcodes.ACC_PROTECTED;
+                    case "private", "private-f" -> Opcodes.ACC_PRIVATE;
+                    case "fdefault", "fdefault-f" -> 0;
+                    default -> -1;
+                };
+                if (access < 0) continue;
+                String classNameOnly = parts[1].replace('/', '.');
+                grants.computeIfAbsent(classNameOnly, k -> new ArrayList<>())
+                        .add(new Grant("", "", access, accessName.endsWith("-f")));
+                count++;
+                continue;
+            }
             if (parts.length < 3) continue;
             String accessName = parts[0];
             int access = switch (accessName) {
@@ -133,6 +153,12 @@ public final class ForgeAccessTransformers {
         new org.objectweb.asm.ClassReader(classBytes).accept(node, 0);
         int touched = 0;
         for (Grant grant : list) {
+            if (grant.member.isEmpty()) {
+                // class-level grant: replace the visibility bits of the class itself
+                node.access = widen(node.access, grant.access, grant.clearFinal);
+                touched++;
+                continue;
+            }
             for (FieldNode field : node.fields) {
                 if (!field.name.equals(grant.member)) continue;
                 if (!grant.descriptor.isEmpty() && !field.desc.equals(grant.descriptor)) continue;

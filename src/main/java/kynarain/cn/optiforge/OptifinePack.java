@@ -486,7 +486,7 @@ public final class OptifinePack {
             if (stageClasses) {
                 for (Map.Entry<String, Path> entry : own.entrySet()) {
                     String path = entry.getKey().replace('.', '/') + ".class";
-                    put(out, path, Files.readAllBytes(entry.getValue()));
+                    put(out, path, OwnRefs.apply(Files.readAllBytes(entry.getValue()), entry.getKey()));
                     stagedClasses++;
                 }
             }
