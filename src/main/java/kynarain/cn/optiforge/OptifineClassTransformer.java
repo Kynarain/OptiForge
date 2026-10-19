@@ -37,6 +37,8 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
 
     @Override
     public ClassNode transform(ClassNode input, ITransformerVotingContext context) {
+        // the game module only exists once classes are being transformed
+        OptiForgeService.ensureModuleReads();
         byte[] prepared = pack.patched(context.getClassName());
         if (prepared == null) return input;
         ClassNode node = new ClassNode();

@@ -47,6 +47,8 @@ public final class OptiForgeService implements ITransformationService {
     private static volatile RuntimeInfo info;
     private static volatile OptifinePack pack;
     private static volatile OptifineClassTransformer transformer;
+    private static volatile IEnvironment environment;
+    private static final java.util.concurrent.atomic.AtomicBoolean READS_INSTALLED = new java.util.concurrent.atomic.AtomicBoolean();
 
     @Override
     public String name() {
@@ -56,6 +58,7 @@ public final class OptiForgeService implements ITransformationService {
     @Override
     public void initialize(IEnvironment environment) {
         try {
+            OptiForgeService.environment = environment;
             if (gameDir == null) {
                 gameDir = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).orElse(null);
             }
@@ -154,6 +157,26 @@ public final class OptiForgeService implements ITransformationService {
         }
     }
 
+    /**
+     * Installs the module reads the first time a class is actually transformed: the GAME layer (which
+     * owns the minecraft module) does not exist yet when initialize()/onLoad() run, so the earlier
+     * attempt reported "could not identify the game module".
+     */
+    static void ensureModuleReads() {
+        if (!READS_INSTALLED.compareAndSet(false, true)) return;
+        IEnvironment env = environment;
+        if (env == null) {
+            System.out.println("[OptiForge] module reads: no environment captured");
+            return;
+        }
+        try {
+            String outcome = ModuleReads.install(env);
+            System.out.println("[OptiForge] " + outcome);
+        } catch (Throwable t) {
+            System.out.println("[OptiForge] module reads failed: " + t);
+        }
+    }
+
     @Override
     public List<ITransformer> transformers() {
         OptifinePack current = ensurePack();
@@ -194,6 +217,20 @@ public final class OptiForgeService implements ITransformationService {
         System.out.println("[OptiForge] onLoad, alongside " + otherServices
                 + (transformer == null ? " (no transformer)" : " (transformer applied to "
                 + transformer.appliedCount() + " classes so far)"));
+        // OptiFine patches reference Forge classes directly; the game module has to be able to read
+        // the Forge modules for those references to resolve (see ModuleReads).
+        try {
+            String outcome = ModuleReads.install(environment);
+            System.out.println("[OptiForge] " + outcome);
+            if (reportFile != null) {
+                java.nio.file.Files.createDirectories(reportFile.getParent());
+                java.nio.file.Files.writeString(reportFile, outcome + System.lineSeparator(),
+                        java.nio.charset.StandardCharsets.UTF_8,
+                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            }
+        } catch (Throwable t) {
+            System.out.println("[OptiForge] module reads failed: " + t);
+        }
         if (current == null) {
             System.out.println("[OptiForge] NOT ACTIVE: no pack was prepared - see optiforge/diagnose.txt");
         } else if (otherServices.stream().anyMatch(s -> s.equalsIgnoreCase("OptiFine"))) {

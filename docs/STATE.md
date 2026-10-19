@@ -71,6 +71,21 @@
 OptiFine 26.x 的 `Options.loadOfOptions` 在 `optionsof.txt` 缺失时 AIOOBE（从 rig 里复制一份可绕过），
 并且它要找 `optifine.OptiFineResourceLocator`——那在 jar 里 `optifine/**` 那一半，我们没有 stage。
 
+### 模块可见性：已试过的两条路（本轮）
+
+1. **反射 `Module.implAddReads`** —— 失败：`InaccessibleObjectException ... java.base does not "opens java.lang"
+   to module OptiForge`，即启动器只对 Forge 自己的模块开了这个口子，没对无名模块开。
+2. **在游戏模块内注入调用** —— 已实现（`ModuleReadsInjector`：给 `net.minecraft.CrashReport` 生成两个私有静态方法，
+   在它的 `<clinit>` 里沿父层链对所有模块 `addReads`）。**注入确实跑了**（标记行
+   `[OptiForge] injected module-read installer running` 出现在 1.21.6 的日志里），但 `Event` 仍然
+   `ClassNotFoundException`。也就是说动态加读边没能影响 Forge 的 `SecureModuleClassLoader` 的解析，或
+   `eventbus` 模块没有把 `net.minecraftforge.eventbus.api` 导出给 `minecraft`。
+
+   下一步的判别实验（很小）：在注入代码里 `println(self.canRead(eventbusModule))` 前后各打一次，并检查
+   eventbus 的 `module-info` 是否 `exports net.minecraftforge.eventbus.api`。
+
+3. 该注入默认开启但对已验证线无副作用：1.21 回归跑过——`Setting user`、`Sound engine started`、
+   `Dev joined the game`、0 崩溃、161 条 `[OptiFine]`。开关：`-Doptiforge.moduleReads=false`。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

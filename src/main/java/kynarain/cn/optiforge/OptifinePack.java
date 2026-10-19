@@ -375,6 +375,15 @@ public final class OptifinePack {
                 }
             }
         }
+        // give the game module the module reads OptiFine patches need (see ModuleReadsInjector).
+        // Default on: measured harmless on 1.21 (no read is added that matters) and required by the
+        // 1.21.6+ investigation; the switch exists so a regression can be isolated quickly.
+        if (!"false".equalsIgnoreCase(System.getProperty("optiforge.moduleReads", "true"))) {
+            for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
+                byte[] updated = ModuleReadsInjector.apply(entry.getValue(), entry.getKey());
+                if (updated != entry.getValue()) patched.put(entry.getKey(), updated);
+            }
+        }
         int compatFixed = 0;
         for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
             byte[] updated = CompatFixes.apply(entry.getValue(), entry.getKey());
@@ -440,6 +449,7 @@ public final class OptifinePack {
                 + "displayName=\"OptiForge - OptiFine classes\"\n"
                 + "description=\"OptiFine's own classes, prepared by OptiForge from the user's OptiFine jar.\"\n";
 
+        boolean stageClasses = !"false".equalsIgnoreCase(System.getProperty("optiforge.stageClasses", "true"));
         Path tmp = mods.resolve(target.getFileName() + ".tmp");
         try (var out = new java.util.zip.ZipOutputStream(Files.newOutputStream(tmp))) {
             put(out, "META-INF/MANIFEST.MF",
@@ -456,9 +466,13 @@ public final class OptifinePack {
             // sees the patched classes. The @Mod annotation is generated here because OptiForge itself
             // must not compile against Forge.
             put(out, "optiforge/generated/GeneratedMod.class", generatedModClass());
-            for (Map.Entry<String, Path> entry : own.entrySet()) {
-                String path = entry.getKey().replace('.', '/') + ".class";
-                put(out, path, Files.readAllBytes(entry.getValue()));
+            int stagedClasses = 0;
+            if (stageClasses) {
+                for (Map.Entry<String, Path> entry : own.entrySet()) {
+                    String path = entry.getKey().replace('.', '/') + ".class";
+                    put(out, path, Files.readAllBytes(entry.getValue()));
+                    stagedClasses++;
+                }
             }
             int resources = 0;
             try (ZipFile source = new ZipFile(optifineJar.toFile())) {
@@ -475,7 +489,7 @@ public final class OptifinePack {
                 }
             }
             notes.append("library mod: ").append(target.getFileName()).append(" (")
-                    .append(own.size()).append(" classes, ").append(resources).append(" assets)\n");
+                    .append(stagedClasses).append(" classes, ").append(resources).append(" assets)\n");
         }
         Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
     }
