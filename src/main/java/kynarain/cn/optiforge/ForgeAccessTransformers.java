@@ -50,16 +50,12 @@ public final class ForgeAccessTransformers {
         }
     }
 
-    public static ForgeAccessTransformers load(SrgRemap remap, StringBuilder notes) {
+    public static ForgeAccessTransformers load(SrgRemap remap, Path gameDir, StringBuilder notes) {
         ForgeAccessTransformers at = new ForgeAccessTransformers();
         at.remap = remap;
-        String classpath = System.getProperty("java.class.path", "");
         int files = 0;
         int lines = 0;
-        for (String entry : classpath.split(java.io.File.pathSeparator)) {
-            if (entry.isBlank()) continue;
-            Path jar = Path.of(entry);
-            if (!jar.getFileName().toString().endsWith(".jar")) continue;
+        for (Path jar : LaunchPaths.jars(gameDir)) {
             try (ZipFile zip = new ZipFile(jar.toFile())) {
                 ZipEntry cfg = zip.getEntry("META-INF/accesstransformer.cfg");
                 if (cfg == null) continue;

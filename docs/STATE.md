@@ -37,16 +37,27 @@
 
 ## 下一步（M1）
 
-当前阻塞：启动到 `Sound engine started` 之后，在 `BlockEntityRenderers.createEntityRenderers` 里
-`Failed to create model for minecraft:skull` → `DragonHeadModel.<init>` 拿不到 `head` 子部件（`NullPointerException`）。
-最可能的原因：OptiFine 的 `patch/assets/**`（1613 条 xdelta，改的是原版模型 json）还没有应用——我们只把
-OptiFine 自带的 assets 打进了 mod jar，没有把它的补丁套到游戏资源上。
+### 已达成（2026-10-20）
 
-1. 实现 `patch/assets/**` 的应用：用同一个 `Patcher`，基包是 vanilla 的 assets（客户端 jar / `assets/` 目录），
-   产出走 `additionalResourcesLocator` 或资源包。
-2. 复跑 `1.21 + Forge 51.0.33`，验收：`Setting user`、`Sound engine started`、能进世界、0 崩溃报告。
-3. 换更小的目标做回归：`1.20.1 + Forge 47.4.23`（载荷同为 SRG，但运行时也是 SRG，重映射应为 no-op）。
-4. 把 `1.21.6` / `1.21.7`（载荷官方名）按同一管线测一遍。
+- **1.20.1 + Forge 47.4.23 + OptiFine `1.20.1 I6`（经 OptiForge 接管）→ STARTED**
+  `Setting user`、`Sound engine started`、112 条 `[OptiFine]`、0 崩溃报告、stderr 0 字节；
+  OptiFine 自己在改 Forge 配置（`[OptiFine] Disable Forge light pipeline`、
+  `Set ForgeConfig.CLIENT.experimentalForgeLightPipelineEnabled=false`），即它确实在运行而不是被绕过。
+  这条线是"官方声明兼容"的版本，所以它主要验证管线本身：补丁、SRG/官方名判定（此线为 SRG，重映射 no-op）、
+  Forge AT 重放、自有类交付都对。
+- **1.21 + Forge 51.0.33 + OptiFine `1.21 J1_pre9`（N/A）** → 到 `Sound engine started`、142 条 `[OptiFine]`，
+  随后死在 Forge 注册 core shader：
+  `Invalid shaders/core/rendertype_entity_unlit_translucent.json: Non [a-z0-9/._-] character in path of location: minecraft:forge:rendertype_entity_unlit_translucent`，
+  触发点是 OptiFine 补丁过的 `GameRenderer.reloadShaders` → `ReflectorForge.postModLoaderEvent`。
+
+### 剩余工作
+
+1. **1.21 的 shader 注册问题**：Forge 51 的自有 shader 名字带 `forge:` 前缀，OptiFine 1.21 的着色器补丁把它当成
+   默认命名空间下的路径。需要定位 OptiFine 补丁里构造 `ResourceLocation` 的那一处（`ShaderInstance` 一带），
+   在 transformer 里替换成 `ResourceLocation.parse`，或让 Forge 那条注册走原版路径。
+2. **进世界验收**：`--quickPlaySingleplayer=RigSession` 参数已正确送达（见 launch args），但 150 秒内没有出现
+   integrated server 日志；下一轮查世界复制/超时，或改用 UI 点击自动化。
+3. 把 `1.21.6` / `1.21.7`（载荷官方名）按同一管线测一遍。
 
 ## 下一步（M0，按顺序）
 

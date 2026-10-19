@@ -73,12 +73,17 @@ public final class OptifinePack {
         return patchedClasses.get(dottedClassName);
     }
 
-    /** Prefixes handed to ModLauncher; both spellings because the interface does not say which it matches. */
-    public static final java.util.Set<String> CLASS_PREFIXES = java.util.Set.of(
-            "optifine", "optifine.", "optifine/",
-            "net.optifine", "net.optifine.", "net/optifine/");
-    public static final java.util.Set<String> RESOURCE_PREFIXES =
-            java.util.Set.of("assets", "assets/");
+    /**
+     * Prefixes handed to ModLauncher.
+     *
+     * <p>ModLauncher 10.0.9 validates them: measured on Forge 1.20.1, a set containing "optifine.",
+     * "net.optifine." and slash-separated forms made the whole launch die with
+     * {@code IllegalArgumentException: Bad prefixes specified}. The accepted form is the dotted package
+     * without a trailing dot - ModLauncher converts the dots to slashes itself before matching.
+     */
+    public static final java.util.Set<String> CLASS_PREFIXES =
+            java.util.Set.of("optifine.", "net.optifine.");
+    public static final java.util.Set<String> RESOURCE_PREFIXES = java.util.Set.of("assets/");
 
     /**
      * URL for one of OptiFine's own classes.
@@ -138,11 +143,7 @@ public final class OptifinePack {
     public enum Namespace {OFFICIAL, SRG, UNKNOWN}
 
     public static Namespace detectRuntimeNamespace(StringBuilder notes) {
-        String classpath = System.getProperty("java.class.path", "");
-        for (String entry : classpath.split(java.io.File.pathSeparator)) {
-            if (entry.isBlank()) continue;
-            Path p = Path.of(entry);
-            if (!Files.isRegularFile(p)) continue;
+        for (Path p : LaunchPaths.jars(null)) {
             try (ZipFile zip = new ZipFile(p.toFile())) {
                 ZipEntry crashReport = zip.getEntry("net/minecraft/CrashReport.class");
                 if (crashReport == null) continue;
@@ -336,32 +337,35 @@ public final class OptifinePack {
                 }
             }
         }
-        // Collision-free rename: a payload can declare both the SRG original and an OptiFine-added
-        // wrapper under the official name (ModelPart: m_171324_ next to getChild). Renaming the
-        // original would produce "ClassFormatError: Duplicate method name". Those tokens are collected
-        // pack-wide and left alone, so every call site stays valid.
-        java.util.Set<String> blocked = new java.util.HashSet<>();
-        if (remap != null) {
-            for (byte[] bytes : raw.values()) blocked.addAll(remap.blockedTokens(bytes));
-        }
+        // Collision handling: a payload can declare both the SRG original and an OptiFine-added wrapper
+        // under the official name (ModelPart: m_171324_ next to a deep-search getChild). The wrapper is
+        // dropped and the original is renamed onto the official name, because vanilla callers expect the
+        // original implementation; leaving the wrapper in place produced "this.head is null" in
+        // DragonHeadModel. See CollisionFixer for the two failed attempts.
         Map<String, byte[]> patched = new LinkedHashMap<>();
         int renamed = 0;
         int unmapped = 0;
+        int fixedClasses = 0;
         for (Map.Entry<String, byte[]> entry : raw.entrySet()) {
             byte[] bytes = entry.getValue();
             if (remap != null) {
-                SrgRemap.Result result = remap.remap(bytes, blocked);
+                byte[] fixedBytes = CollisionFixer.fix(bytes, remap);
+                if (fixedBytes != bytes) fixedClasses++;
+                bytes = fixedBytes;
+                SrgRemap.Result result = remap.remap(bytes);
                 renamed += result.renamed;
                 unmapped += result.unmapped;
                 bytes = result.bytes;
             }
             patched.put(entry.getKey(), bytes);
         }
+        notes.append("collision fixes: ").append(fixedClasses).append(" class(es)\n");
+        java.util.Set<String> blocked = java.util.Set.of();
         // Forge widens members through its access transformer before transformers run; a payload
         // applied to vanilla bytes brings the vanilla (private) flags back, which crashed the game
         // with IllegalAccessError from Forge's own ForgeRenderTypes. Replay those grants.
         int widened = 0;
-        ForgeAccessTransformers accessTransformers = ForgeAccessTransformers.load(remap, notes);
+        ForgeAccessTransformers accessTransformers = ForgeAccessTransformers.load(remap, gameDir, notes);
         if (!accessTransformers.isEmpty()) {
             for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
                 byte[] updated = accessTransformers.transform(entry.getValue(), entry.getKey());
