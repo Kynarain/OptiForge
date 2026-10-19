@@ -5,6 +5,8 @@ import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * The versions and paths of the run OptiForge is attached to.
@@ -52,6 +54,36 @@ public final class RuntimeInfo {
         String mc = args.getOrDefault("fml.mcVersion", "");
         String forge = args.getOrDefault("fml.forgeVersion", "");
         String fml = args.getOrDefault("fml.fmlVersion", "");
+
+        // Forge 1.20.6+ no longer passes --fml.* on the command line (ForgeBootstrap reads the versions
+        // out of the fmlloader module), but the launcher's --version argument still carries the profile
+        // id, e.g. "1.21-forge-51.0.33" or "neoforge-21.4.149". Parsed as a fallback, never over an
+        // explicit --fml value.
+        String versionArg = args.getOrDefault("version", "");
+        if (mc.isEmpty() || forge.isEmpty()) {
+            Matcher m = Pattern.compile("^((?:\\d+\\.)*\\d+?)-forge-(\\d+(?:\\.\\d+)*)$").matcher(versionArg);
+            if (m.matches()) {
+                if (mc.isEmpty()) mc = m.group(1);
+                if (forge.isEmpty()) forge = m.group(2);
+            } else {
+                Matcher neo = Pattern.compile("^neoforge-(\\d+(?:\\.\\d+)*)$").matcher(versionArg);
+                if (neo.matches()) {
+                    String neoforge = neo.group(1);
+                    if (forge.isEmpty()) {
+                        // NeoForge's first component is the Minecraft minor, e.g. 21.4.149 -> 1.21.4
+                        String[] parts = neoforge.split("\\.");
+                        if (parts.length >= 2) {
+                            mc = (mc.isEmpty() ? "1." + parts[0] + "." + parts[1] : mc);
+                            forge = neoforge;
+                        }
+                    }
+                }
+            }
+        }
+        // Explicit overrides win, for rigs whose profile id does not follow any convention.
+        mc = orDefault(System.getProperty("optiforge.mc"), mc);
+        forge = orDefault(System.getProperty("optiforge.forge"), forge);
+
         Path gameDir = fallbackGameDir;
         String argGameDir = args.get("gameDir");
         if (argGameDir != null && !argGameDir.isBlank()) {
@@ -63,10 +95,15 @@ public final class RuntimeInfo {
         }
         String problem = null;
         if (mc.isEmpty() || forge.isEmpty()) {
-            problem = "could not read --fml.mcVersion/--fml.forgeVersion from sun.java.command";
+            problem = "could not read the Minecraft/Forge versions from sun.java.command"
+                    + (versionArg.isEmpty() ? "" : " (--version was \"" + versionArg + "\")");
         }
         return new RuntimeInfo(mc, forge, fml, gameDir,
                 "sun.java.command (" + args.size() + " args)", problem);
+    }
+
+    private static String orDefault(String preferred, String fallback) {
+        return preferred == null || preferred.isBlank() ? fallback : preferred.trim();
     }
 
     public boolean known() {

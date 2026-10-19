@@ -40,6 +40,17 @@ Write-Host "javac $($sources.Count) file(s) with $Jdk"
 if ($LASTEXITCODE -ne 0) { throw "javac failed with exit code $LASTEXITCODE" }
 
 Copy-Item (Join-Path $root 'src\main\resources\*') $classes -Recurse -Force
+# The SRG->official tables live in data/ (source of truth) and are shipped as resources, so the jar
+# carries whatever the last tools/build-srg-map.ps1 produced.
+$mappings = Join-Path $root 'data\mappings'
+if (Test-Path $mappings) {
+    $target = Join-Path $classes 'optiforge\mappings'
+    New-Item -ItemType Directory -Force -Path $target | Out-Null
+    Copy-Item (Join-Path $mappings '*.tsv') $target -Force
+    # index.txt lets the runtime find the tables without listing jar entries; one line per MC version.
+    $index = Get-ChildItem (Join-Path $mappings '*.tsv') | ForEach-Object { $_.BaseName -replace '-srg-to-official$', '' }
+    [System.IO.File]::WriteAllLines((Join-Path $target 'index.txt'), $index, (New-Object System.Text.UTF8Encoding($false)))
+}
 
 $out = Join-Path $libs "OptiForge-$Version.jar"
 & $jarTool --create --file $out --main-class kynarain.cn.optiforge.Diagnose -C $classes .

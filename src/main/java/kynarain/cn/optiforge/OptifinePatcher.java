@@ -113,6 +113,34 @@ public final class OptifinePatcher implements AutoCloseable {
         return new String(raw, StandardCharsets.US_ASCII).trim().toLowerCase(java.util.Locale.ROOT);
     }
 
+    /**
+     * Opens a base jar as the patcher's resource provider. Kept public so a whole-payload run can open
+     * the base once instead of once per class.
+     */
+    public Object newResourceProvider(ZipFile base) throws IOException {
+        try {
+            return loader.loadClass("optifine.ZipResourceProvider")
+                    .getConstructor(ZipFile.class).newInstance(base);
+        } catch (ReflectiveOperationException e) {
+            throw unwrap("ZipResourceProvider", e);
+        }
+    }
+
+    /** Applies one payload entry with a provider opened by {@link #newResourceProvider(ZipFile)}. */
+    public byte[] applyWith(Object provider, Pattern[] patterns, Map<String, String> configuration,
+                            String logicalName) throws IOException {
+        byte[] delta = readEntry(optifineJar, "patch/srg/" + logicalName + ".class.xdelta");
+        try {
+            return (byte[]) applyPatch.invoke(null, "srg/" + logicalName + ".class", delta,
+                    patterns, configuration, provider);
+        } catch (InvocationTargetException e) {
+            Throwable cause = e.getCause() == null ? e : e.getCause();
+            throw new IOException(cause.getClass().getSimpleName() + ": " + cause.getMessage(), cause);
+        } catch (ReflectiveOperationException e) {
+            throw unwrap("applyPatch", e);
+        }
+    }
+
     /** Which logical names the jar carries a payload for, in jar order. */
     public Map<String, Integer> payload() throws IOException {
         Map<String, Integer> out = new LinkedHashMap<>();

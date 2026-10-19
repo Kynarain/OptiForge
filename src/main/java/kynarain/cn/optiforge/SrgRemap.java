@@ -49,6 +49,11 @@ public final class SrgRemap {
         return new SrgRemap(map);
     }
 
+    /** The official name for an SRG id, or null when the table does not carry it. */
+    public String officialName(String srg) {
+        return srg == null ? null : srgToOfficial.get(srg);
+    }
+
     public int size() {
         return srgToOfficial.size();
     }
@@ -67,6 +72,22 @@ public final class SrgRemap {
     }
 
     public Result remap(byte[] classBytes) {
+        return remap(classBytes, java.util.Set.of());
+    }
+
+    /**
+     * Renames SRG tokens except the ones in {@code blocked}.
+     *
+     * <p>Blocking exists because a payload can contain <b>both</b> the original member under its SRG
+     * name and an OptiFine-added wrapper under the official name - {@code ModelPart} carries
+     * {@code m_171324_(String)} next to an added {@code getChild(String)}. Renaming the SRG one would
+     * turn a legal class into a {@code ClassFormatError: Duplicate method name "getChild"}. Leaving
+     * the SRG token alone keeps both members and keeps every call site valid: OptiFine's wrapper calls
+     * the SRG member it still has, and game code calls the official wrapper. Callers elsewhere are
+     * blocked too (the caller cannot know which class declared what), and renaming them to the wrapper
+     * name would be equivalent anyway, since the wrapper delegates to the original.
+     */
+    public Result remap(byte[] classBytes, java.util.Set<String> blocked) {
         // Constant pool layout: u4 magic, u2 minor, u2 major, u2 count, then entries.
         if (classBytes.length < 10) return new Result(classBytes, 0, 0);
         if (readInt(classBytes, 0) != 0xCAFEBABE) return new Result(classBytes, 0, 0);
@@ -79,6 +100,7 @@ public final class SrgRemap {
         // Remember each Utf8 entry's byte range and its replacement, if any.
         List<int[]> ranges = new java.util.ArrayList<>();
         List<byte[]> replacements = new java.util.ArrayList<>();
+        List<Integer> utf8At = new java.util.ArrayList<>(); // parallel to ranges: cp index
         int renamed = 0;
         int unmapped = 0;
 
@@ -97,6 +119,7 @@ public final class SrgRemap {
                         if (official != null) {
                             ranges.add(new int[]{entryStart, pos});
                             replacements.add(utf8Entry(official));
+                            utf8At.add(i);
                             renamed++;
                         } else {
                             unmapped++;
@@ -117,7 +140,31 @@ public final class SrgRemap {
             }
         }
         if (renamed == 0) return new Result(classBytes, 0, unmapped);
+        return new Result(rebuild(classBytes, ranges, replacements, blocked, utf8At), renamed, unmapped);
+    }
 
+    private byte[] rebuild(byte[] classBytes, List<int[]> ranges, List<byte[]> replacements,
+                           java.util.Set<String> blocked, List<Integer> utf8At) {
+        if (blocked.isEmpty()) return splice(classBytes, ranges, replacements);
+        ByteArrayOutputStream out = new ByteArrayOutputStream(classBytes.length + 64);
+        int copied = 0;
+        for (int i = 0; i < ranges.size(); i++) {
+            int start = ranges.get(i)[0];
+            int end = ranges.get(i)[1];
+            // The SRG token of this entry, to test the block list.
+            out.write(classBytes, copied, start - copied);
+            String srg = new String(classBytes, start + 3, end - start - 3, StandardCharsets.UTF_8);
+            byte[] entry = blocked.contains(srg)
+                    ? java.util.Arrays.copyOfRange(classBytes, start, end)
+                    : replacements.get(i);
+            out.write(entry, 0, entry.length);
+            copied = end;
+        }
+        out.write(classBytes, copied, classBytes.length - copied);
+        return out.toByteArray();
+    }
+
+    private static byte[] splice(byte[] classBytes, List<int[]> ranges, List<byte[]> replacements) {
         ByteArrayOutputStream out = new ByteArrayOutputStream(classBytes.length + 64);
         int copied = 0;
         for (int i = 0; i < ranges.size(); i++) {
@@ -129,7 +176,120 @@ public final class SrgRemap {
             copied = end;
         }
         out.write(classBytes, copied, classBytes.length - copied);
-        return new Result(out.toByteArray(), renamed, unmapped);
+        return out.toByteArray();
+    }
+
+    /**
+     * Which SRG tokens in this class would collide with a member OptiFine already declares under the
+     * official name - i.e. the tokens that must NOT be renamed.
+     */
+    public java.util.Set<String> blockedTokens(byte[] classBytes) {
+        java.util.Set<String> blocked = new java.util.HashSet<>();
+        try {
+            Cursor cursor = new Cursor(classBytes);
+            if (cursor.takeInt() != 0xCAFEBABE) return blocked;
+            cursor.skip(4); // minor + major
+            int cpCount = cursor.takeU2();
+            Map<Integer, String> utf8 = new HashMap<>();
+            for (int i = 1; i < cpCount; i++) {
+                int tag = cursor.takeU1();
+                switch (tag) {
+                    case 1 -> utf8.put(i, cursor.takeUtf8());
+                    case 7, 8, 16, 19, 20 -> cursor.skip(2);
+                    case 15 -> cursor.skip(3);
+                    case 3, 4, 9, 10, 11, 12, 17, 18 -> cursor.skip(4);
+                    case 5, 6 -> {
+                        cursor.skip(8);
+                        i++;
+                    }
+                    default -> {
+                        return blocked;
+                    }
+                }
+            }
+            cursor.skip(6); // access, this, super
+            int interfaces = cursor.takeU2();
+            cursor.skip(2 * interfaces);
+            for (int section = 0; section < 2; section++) { // fields, methods
+                int count = cursor.takeU2();
+                java.util.Set<String> declared = new java.util.HashSet<>();
+                java.util.Map<String, Integer> names = new HashMap<>(); // name -> cp index
+                java.util.List<int[]> members = new java.util.ArrayList<>();
+                for (int i = 0; i < count; i++) {
+                    cursor.skip(2); // access
+                    int nameIndex = cursor.takeU2();
+                    int descIndex = cursor.takeU2();
+                    members.add(new int[]{nameIndex, descIndex});
+                    int attributes = cursor.takeU2();
+                    for (int a = 0; a < attributes; a++) {
+                        cursor.skip(2); // attribute name
+                        int length = cursor.takeInt();
+                        cursor.skip(length);
+                    }
+                }
+                java.util.Set<String> officialNames = new java.util.HashSet<>();
+                java.util.Set<String> srgNames = new java.util.HashSet<>();
+                for (int[] member : members) {
+                    String name = utf8.get(member[0]);
+                    String desc = utf8.get(member[1]);
+                    if (name == null) continue;
+                    String key = name + desc;
+                    declared.add(key);
+                    if (SRG.matcher(name).matches()) srgNames.add(name);
+                    else officialNames.add(key);
+                }
+                for (String srg : srgNames) {
+                    String official = srgToOfficial.get(srg);
+                    if (official == null) continue;
+                    for (int[] member : members) {
+                        String name = utf8.get(member[0]);
+                        if (!srg.equals(name)) continue;
+                        String desc = utf8.get(member[1]);
+                        if (officialNames.contains(official + desc)) blocked.add(srg);
+                    }
+                }
+            }
+        } catch (RuntimeException ignored) {
+            // A class this parser cannot follow simply blocks nothing.
+        }
+        return blocked;
+    }
+
+    /** Minimal byte cursor for the class-file structures used above. */
+    private static final class Cursor {
+        final byte[] data;
+        int pos;
+
+        Cursor(byte[] data) {
+            this.data = data;
+        }
+
+        int takeU1() {
+            return data[pos++] & 0xFF;
+        }
+
+        int takeU2() {
+            int v = ((data[pos] & 0xFF) << 8) | (data[pos + 1] & 0xFF);
+            pos += 2;
+            return v;
+        }
+
+        int takeInt() {
+            int v = readInt(data, pos);
+            pos += 4;
+            return v;
+        }
+
+        String takeUtf8() {
+            int len = takeU2();
+            String value = new String(data, pos, len, StandardCharsets.UTF_8);
+            pos += len;
+            return value;
+        }
+
+        void skip(int n) {
+            pos += n;
+        }
     }
 
     private static byte[] utf8Entry(String value) {

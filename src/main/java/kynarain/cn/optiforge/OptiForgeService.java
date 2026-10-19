@@ -5,33 +5,48 @@ import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
 import cpw.mods.modlauncher.api.IncompatibleEnvironmentException;
 
+import java.io.IOException;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
- * OptiForge's ModLauncher entry point.
+ * OptiForge's ModLauncher entry point: it takes OptiFine over completely.
  *
  * <p>Forge finds this class because the jar declares
- * {@code META-INF/services/cpw.mods.modlauncher.api.ITransformationService}. The same rule that makes
- * the user's OptiFine jar reachable to Forge makes this jar reachable: Forge's
- * {@code ModDirTransformerDiscoverer} collects every jar in {@code mods/} that provides one of a few
- * service interfaces and hands it to ModLauncher as a transformation service, excluded from ordinary
- * mod discovery. That is why OptiForge ships no {@code mods.toml} and no {@code @Mod} class.
+ * {@code META-INF/services/cpw.mods.modlauncher.api.ITransformationService}. Forge's
+ * {@code ModDirTransformerDiscoverer} hands every such jar in {@code mods/} to ModLauncher as a
+ * transformation service and excludes it from ordinary mod discovery - which is why this project has
+ * no {@code mods.toml} and no {@code @Mod}.
  *
- * <p>Right now this service only diagnoses ({@link Diagnose}); {@link #transformers()} is deliberately
- * empty. The reason is recorded in {@code docs/STATE.md}: which fix is needed depends on what the
- * first real Forge launch of an incompatible OptiFine build reports, and that observation is what the
- * diagnostic produces.
+ * <p><b>State is static on purpose.</b> Measured: ModLauncher instantiates the service more than once
+ * for one launch (one instance ran {@code initialize}, wrote the pack and then its
+ * {@code additionalClassesLocator} was never consulted, while another instance's {@code onLoad} saw
+ * {@code pack == null} and its locator answered "empty" for every name). That split turned into
+ * {@code NoClassDefFoundError: net/optifine/util/MathUtils} while {@code net.minecraft.Util}
+ * initialised. One process, one pack: everything below is process-wide and prepared exactly once.
+ *
+ * <p>The user's OptiFine jar must live in {@code <game>/optiforge/}, not in {@code mods/}: if it is in
+ * {@code mods/}, OptiFine's own service runs as well and both pipelines patch the same classes.
  */
 public final class OptiForgeService implements ITransformationService {
 
     public static final String NAME = "optiforge";
 
-    private RuntimeInfo info;
-    private Path reportFile;
+    private static final StringBuilder NOTES = new StringBuilder();
+    private static volatile boolean prepared;
+    private static volatile Path gameDir;
+    private static volatile Path reportFile;
+    private static volatile RuntimeInfo info;
+    private static volatile OptifinePack pack;
+    private static volatile OptifineClassTransformer transformer;
 
     @Override
     public String name() {
@@ -41,39 +56,157 @@ public final class OptiForgeService implements ITransformationService {
     @Override
     public void initialize(IEnvironment environment) {
         try {
-            Path gameDir = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).orElse(null);
-            info = RuntimeInfo.fromLaunchArguments(gameDir);
-            if (gameDir != null) {
+            if (gameDir == null) {
+                gameDir = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).orElse(null);
+            }
+            if (reportFile == null && gameDir != null) {
                 reportFile = gameDir.resolve("optiforge").resolve("diagnose.txt");
             }
-            // The diagnostic is the whole of this build; keep it cheap and never let it break a launch.
-            Diagnose.run(info, info.gameDir == null ? null : info.gameDir.resolve("mods"), reportFile);
+            if (info == null && gameDir != null) {
+                info = RuntimeInfo.fromLaunchArguments(gameDir);
+            }
+            ensurePack();
         } catch (Throwable t) {
-            System.out.println("[OptiForge] diagnosis failed: " + t);
+            synchronized (NOTES) {
+                NOTES.append("OptiForge failed in initialize: ").append(t).append('\n');
+            }
             t.printStackTrace(System.out);
+        }
+    }
+
+    /** Builds the pack once per process and writes the report. Idempotent. */
+    static OptifinePack ensurePack() {
+        if (prepared) return pack;
+        synchronized (OptiForgeService.class) {
+            if (prepared) return pack;
+            // The first call can come from additionalClassesLocator()/transformers(), before any
+            // initialize() has handed us an IEnvironment - so recover the game directory from the
+            // launch arguments (--gameDir) first. Without this the pack was built with gameDir=null,
+            // "no OptiFine jar" was reported, and the launch looked successful while OptiFine was absent.
+            if (gameDir == null || info == null) {
+                RuntimeInfo parsed = RuntimeInfo.fromLaunchArguments(gameDir);
+                if (gameDir == null) gameDir = parsed.gameDir;
+                if (info == null) info = parsed;
+                if (reportFile == null && gameDir != null) {
+                    reportFile = gameDir.resolve("optiforge").resolve("diagnose.txt");
+                }
+            }
+            if (gameDir == null) {
+                // No environment at all yet: leave prepared=false so a later call can still build.
+                return null;
+            }
+            prepared = true;
+            try {
+                if (info == null) {
+                    info = RuntimeInfo.fromLaunchArguments(gameDir);
+                }
+                NOTES.append("OptiForge ").append(Diagnose.VERSION).append('\n')
+                        .append(info.describe()).append('\n');
+
+                OptifinePack.Namespace runtime = OptifinePack.detectRuntimeNamespace(NOTES);
+                Path mapping = OptifinePack.pickMapping(info.mcVersion, NOTES);
+                // Remap only when the runtime speaks official names: an SRG payload on a SRG runtime is
+                // already correct, and renaming it would be the bug. When the payload is official too,
+                // the rename matches zero tokens and is a no-op.
+                boolean remapEnabled = runtime == OptifinePack.Namespace.OFFICIAL && mapping != null;
+                NOTES.append("remap: ").append(remapEnabled ? "enabled" : "disabled")
+                        .append(" (runtime=").append(runtime)
+                        .append(", mapping=").append(mapping == null ? "none" : mapping.getFileName())
+                        .append(")\n");
+
+                Path optifineJar = OptifinePack.findOptifineJar(gameDir,
+                        System.getProperty("optiforge.optifine"), NOTES);
+                if (optifineJar == null) {
+                    NOTES.append("no OptiFine jar: put it in <game>/optiforge/ (or pass -Doptiforge.optifine=)\n");
+                    finish();
+                    return null;
+                }
+                Path baseJar = OptifinePack.findBaseJar(info, gameDir, optifineJar,
+                        System.getProperty("optiforge.vanilla"), NOTES);
+                if (baseJar == null) {
+                    finish();
+                    return null;
+                }
+                pack = OptifinePack.prepare(gameDir, optifineJar, baseJar, mapping, remapEnabled, NOTES);
+                NOTES.append(pack.summary()).append('\n');
+            } catch (Throwable t) {
+                NOTES.append("OptiForge failed to prepare the pack: ").append(t).append('\n');
+                t.printStackTrace(System.out);
+            }
+            finish();
+            return pack;
+        }
+    }
+
+    private static void finish() {
+        String text;
+        synchronized (NOTES) {
+            text = NOTES.toString();
+        }
+        System.out.println("[OptiForge] " + text.replace("\n", "\n[OptiForge] "));
+        if (reportFile != null) {
+            try {
+                Files.createDirectories(reportFile.getParent());
+                Files.writeString(reportFile, text, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                System.out.println("[OptiForge] could not write " + reportFile + ": " + e);
+            }
         }
     }
 
     @Override
     public List<ITransformer> transformers() {
-        System.out.println("[OptiForge] transformers(): none in this build (diagnose-only skeleton)");
-        return List.of();
+        OptifinePack current = ensurePack();
+        if (current == null) {
+            System.out.println("[OptiForge] transformers(): no pack prepared, nothing to transform");
+            return List.of();
+        }
+        if (transformer == null) {
+            transformer = new OptifineClassTransformer(current);
+        }
+        System.out.println("[OptiForge] transformers(): " + current.patchedClasses.size()
+                + " target classes, " + current.ownClasses.size() + " own classes");
+        return List.of(transformer);
+    }
+
+    @Override
+    public Map.Entry<Set<String>, Supplier<Function<String, Optional<URL>>>> additionalClassesLocator() {
+        OptifinePack current = ensurePack();
+        if (current == null) return null;
+        System.out.println("[OptiForge] additionalClassesLocator() requested, prefixes " + OptifinePack.CLASS_PREFIXES);
+        return Map.entry(OptifinePack.CLASS_PREFIXES, () -> {
+            System.out.println("[OptiForge] class locator supplier created");
+            return current::ownClassUrl;
+        });
+    }
+
+    @Override
+    public Map.Entry<Set<String>, Supplier<Function<String, Optional<URL>>>> additionalResourcesLocator() {
+        OptifinePack current = ensurePack();
+        if (current == null) return null;
+        return Map.entry(OptifinePack.RESOURCE_PREFIXES, () -> current::resourceUrl);
     }
 
     @Override
     public void onLoad(IEnvironment environment, Set<String> otherServices)
             throws IncompatibleEnvironmentException {
-        System.out.println("[OptiForge] onLoad, alongside " + otherServices);
-        if (reportFile != null && Files.isReadable(reportFile)) {
-            System.out.println("[OptiForge] diagnosis: " + reportFile);
-        }
-        if (info != null && !info.known()) {
-            System.out.println("[OptiForge] " + info.problem);
+        OptifinePack current = ensurePack();
+        System.out.println("[OptiForge] onLoad, alongside " + otherServices
+                + (transformer == null ? " (no transformer)" : " (transformer applied to "
+                + transformer.appliedCount() + " classes so far)"));
+        if (current == null) {
+            System.out.println("[OptiForge] NOT ACTIVE: no pack was prepared - see optiforge/diagnose.txt");
+        } else if (otherServices.stream().anyMatch(s -> s.equalsIgnoreCase("OptiFine"))) {
+            System.out.println("[OptiForge] WARNING: OptiFine's own transformation service is also loaded;"
+                    + " move the OptiFine jar out of mods/ into optiforge/");
         }
     }
 
-    /** Exposed for tests and for the offline driver: the last environment this service saw. */
     public Optional<RuntimeInfo> lastEnvironment() {
         return Optional.ofNullable(info);
+    }
+
+    public Optional<OptifinePack> pack() {
+        return Optional.ofNullable(pack);
     }
 }
