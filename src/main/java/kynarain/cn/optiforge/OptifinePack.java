@@ -94,6 +94,9 @@ public final class OptifinePack {
      */
     public static volatile java.util.List<String> parentModules = java.util.List.of();
 
+    /** MC version of the current launch (set by the service before preparing); drives version-gated fixes. */
+    public static volatile String mcVersion = "";
+
     /**
      * URL for one of OptiFine's own classes.
      *
@@ -305,7 +308,11 @@ public final class OptifinePack {
      *                     harmless to leave on when the payload is already official
      */
     public static OptifinePack prepare(Path gameDir, Path optifineJar, Path baseJar, Path mapping,
-                                       boolean remapEnabled, StringBuilder notes) throws IOException {
+                                       boolean remapEnabled, String mcVersionForFixes, StringBuilder notes)
+            throws IOException {
+        // Threaded through instead of a static field: the version has to be known at the moment the pack is
+        // built, and the first build can happen before the service has parsed the launch arguments.
+        mcVersion = mcVersionForFixes == null ? "" : mcVersionForFixes;
         String key = key(optifineJar, baseJar);
         Path cacheRoot = gameDir == null ? null : gameDir.resolve("optiforge").resolve("pack").resolve(key);
         SrgRemap remap = null;
@@ -393,9 +400,13 @@ public final class OptifinePack {
                 if (updated != entry.getValue()) patched.put(entry.getKey(), updated);
             }
         }
+        // Forge 26 added a parameter to ImmediateWindowHandler.setupMinecraftWindow; OptiFine 26.x still
+        // calls it with four arguments (measured: wrong number of arguments: 4 expected: 5).
+        boolean modernWindow = mcVersion != null && mcVersion.startsWith("26.");
+        notes.append("modern window fix: ").append(modernWindow).append(" (mc=").append(mcVersion).append(")\n");
         int compatFixed = 0;
         for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
-            byte[] updated = CompatFixes.apply(entry.getValue(), entry.getKey());
+            byte[] updated = CompatFixes.apply(entry.getValue(), entry.getKey(), modernWindow);
             if (updated != entry.getValue()) {
                 patched.put(entry.getKey(), updated);
                 compatFixed++;

@@ -59,6 +59,12 @@ public final class OptiForgeService implements ITransformationService {
     public void initialize(IEnvironment environment) {
         try {
             OptiForgeService.environment = environment;
+            try {
+                RuntimeInfo info = RuntimeInfo.fromLaunchArguments(null);
+                OptifinePack.mcVersion = info.mcVersion;
+            } catch (Throwable ignored) {
+                // the version is only used to gate version-specific fixes
+            }
             rememberParentModules(environment);
             if (gameDir == null) {
                 gameDir = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).orElse(null);
@@ -131,7 +137,8 @@ public final class OptiForgeService implements ITransformationService {
                     finish();
                     return null;
                 }
-                pack = OptifinePack.prepare(gameDir, optifineJar, baseJar, mapping, remapEnabled, NOTES);
+                pack = OptifinePack.prepare(gameDir, optifineJar, baseJar, mapping, remapEnabled,
+                        info == null ? "" : info.mcVersion, NOTES);
                 NOTES.append(pack.summary()).append('\n');
             } catch (Throwable t) {
                 NOTES.append("OptiForge failed to prepare the pack: ").append(t).append('\n');

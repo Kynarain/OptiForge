@@ -210,6 +210,21 @@ rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area:
 
 另外 26.x 还缺 `optifine/**`（`OptiFineResourceLocator`）的 staging：日志里 OptiFine 自己报
 `(Reflector) Class not present: optifine.OptiFineResourceLocator`。
+### 26.x：窗口反射已修，剩下 `IForgeVertexFormat`（本轮）
+
+已实现并生效（`compat fixes: 1`，日志有 `[OptiForge] compat fix in com.mojang.blaze3d.platform.Window:
+bypassed ImmediateWindowHandler.setupMinecraftWindow (arity changed on 26.x) x1`）：
+在 26.x 上把 OptiFine `Window` 里那个 4 参数的反射调用改成直接返回 `0`，`Window` 会把 0 当作
+"没有 early window"，回落到原版窗口创建。之前那条 `wrong number of arguments: 4 expected: 5` 消失。
+
+（顺带修了两处：MC 版本必须在**建包之前**就已知，现在作为参数传进 `prepare()`，不再依赖静态字段；
+版本门控的 compat 规则只有 `mcVersion` 以 `26.` 开头时才启用，所以 1.21.x 七条线不受影响。）
+
+**剩下唯一阻塞**：`DefaultVertexFormat.<clinit>(第 9 行)` 触发定义某个类时，
+`NoClassDefFoundError: net/minecraftforge/client/extensions/IForgeVertexFormat`（`defineClass1` 处）。
+已确认该名字**不在**我们产出的任何 class、`own` 类、基包 jar、26.1.2 profile 的 40 个库里；
+需要下一步用 `-Xlog:class+load=info` 找到**正要被定义的那个类**（日志里 `class,load` 的那一行紧挨着报错），
+再看它为什么带上这个接口——大概率是 Forge 的 `minecraft` 模块读边问题（`forge` 模块不可读）。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -327,6 +342,21 @@ rig 经验：NeoForge 21.7 那个 13.6 MB 的世界会在 `Preparing spawn area:
 
 另外 26.x 还缺 `optifine/**`（`OptiFineResourceLocator`）的 staging：日志里 OptiFine 自己报
 `(Reflector) Class not present: optifine.OptiFineResourceLocator`。
+### 26.x：窗口反射已修，剩下 `IForgeVertexFormat`（本轮）
+
+已实现并生效（`compat fixes: 1`，日志有 `[OptiForge] compat fix in com.mojang.blaze3d.platform.Window:
+bypassed ImmediateWindowHandler.setupMinecraftWindow (arity changed on 26.x) x1`）：
+在 26.x 上把 OptiFine `Window` 里那个 4 参数的反射调用改成直接返回 `0`，`Window` 会把 0 当作
+"没有 early window"，回落到原版窗口创建。之前那条 `wrong number of arguments: 4 expected: 5` 消失。
+
+（顺带修了两处：MC 版本必须在**建包之前**就已知，现在作为参数传进 `prepare()`，不再依赖静态字段；
+版本门控的 compat 规则只有 `mcVersion` 以 `26.` 开头时才启用，所以 1.21.x 七条线不受影响。）
+
+**剩下唯一阻塞**：`DefaultVertexFormat.<clinit>(第 9 行)` 触发定义某个类时，
+`NoClassDefFoundError: net/minecraftforge/client/extensions/IForgeVertexFormat`（`defineClass1` 处）。
+已确认该名字**不在**我们产出的任何 class、`own` 类、基包 jar、26.1.2 profile 的 40 个库里；
+需要下一步用 `-Xlog:class+load=info` 找到**正要被定义的那个类**（日志里 `class,load` 的那一行紧挨着报错），
+再看它为什么带上这个接口——大概率是 Forge 的 `minecraft` 模块读边问题（`forge` 模块不可读）。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

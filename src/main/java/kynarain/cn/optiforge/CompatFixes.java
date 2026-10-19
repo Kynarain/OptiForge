@@ -2,6 +2,7 @@ package kynarain.cn.optiforge;
 
 import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.AbstractInsnNode;
+import org.objectweb.asm.tree.FieldInsnNode;
 import org.objectweb.asm.tree.InsnNode;
 import org.objectweb.asm.tree.ClassNode;
 import org.objectweb.asm.tree.MethodInsnNode;
@@ -38,11 +39,23 @@ public final class CompatFixes {
 
     /** @return bytes with the known-incompatible calls rewritten, or the input when there is nothing to do */
     public static byte[] apply(byte[] classBytes, String dottedClassName) {
+        return apply(classBytes, dottedClassName, false);
+    }
+
+    /**
+     * @param modernWindow true on MC 26.x, where Forge's
+     *                     {@code ImmediateWindowHandler.setupMinecraftWindow} gained a fifth parameter
+     *                     ({@code Supplier<Object>}) that OptiFine's reflection call does not pass -
+     *                     measured: "wrong number of arguments: 4 expected: 5" from
+     *                     {@code Reflector.callLong} inside {@code Window.<init>}
+     */
+    public static byte[] apply(byte[] classBytes, String dottedClassName, boolean modernWindow) {
         ClassNode node = new ClassNode();
         new org.objectweb.asm.ClassReader(classBytes).accept(node, 0);
 
         int rewritten = 0;
         int ambient = 0;
+        int window = 0;
         for (MethodNode method : node.methods) {
             for (AbstractInsnNode instruction : method.instructions) {
                 if (!(instruction instanceof MethodInsnNode call)) continue;
@@ -74,10 +87,17 @@ public final class CompatFixes {
                 }
             }
         }
-        if (rewritten == 0 && ambient == 0) return classBytes;
+        if (modernWindow) {
+            window = bypassImmediateWindowHandler(node, dottedClassName);
+        }
+        if (rewritten == 0 && ambient == 0 && window == 0) return classBytes;
         if (rewritten > 0) {
             System.out.println("[OptiForge] compat fix in " + dottedClassName
                     + ": withDefaultNamespace -> parse x" + rewritten);
+        }
+        if (window > 0) {
+            System.out.println("[OptiForge] compat fix in " + dottedClassName + ": bypassed "
+                    + "ImmediateWindowHandler.setupMinecraftWindow (arity changed on 26.x) x" + window);
         }
         if (ambient > 0) {
             System.out.println("[OptiForge] compat fix in " + dottedClassName
@@ -87,4 +107,45 @@ public final class CompatFixes {
         node.accept(writer);
         return writer.toByteArray();
     }
-}
+
+    /**
+     * Makes the reflective {@code ImmediateWindowHandler.setupMinecraftWindow} call return 0.
+     *
+     * <p>The call site pushes the ReflectorMethod, asks {@code exists()}, and branches into OptiFine's own
+     * early-window path. Faking the answer keeps the branch guard intact but sends control down the
+     * vanilla window creation instead, which is what works on Forge 26 - there the reflective call would
+     * need a fifth argument OptiFine never supplies.
+     *
+     * @return number of call sites rewritten
+     */
+    private static int bypassImmediateWindowHandler(ClassNode node, String dottedClassName) {
+        if (!dottedClassName.equals("com.mojang.blaze3d.platform.Window")) return 0;
+        int changed = 0;
+        for (MethodNode method : node.methods) {
+            boolean afterSetupField = false;
+            for (AbstractInsnNode instruction : method.instructions) {
+                if (instruction instanceof FieldInsnNode field
+                        && field.owner.equals("net/optifine/reflect/Reflector")
+                        && field.name.startsWith("ImmediateWindowHandler")) {
+                    afterSetupField = true;
+                    continue;
+                }
+                if (!afterSetupField) continue;
+                if (instruction instanceof MethodInsnNode call
+                        && "net/optifine/reflect/ReflectorMethod".equals(call.owner)
+                        && "callLong".equals(call.name)
+                        && "([Ljava/lang/Object;)J".equals(call.desc)) {
+                    // Four arguments are supplied, Forge 26's method wants five. Return 0 instead of
+                    // invoking it: Window stores the result and only uses it when it is non-zero, so 0 sends
+                    // control down the vanilla window creation (measured layout: callLong -> lstore 8 ->
+                    // if (handle != 0) { this.handle = handle; }).
+                    method.instructions.insertBefore(instruction, new InsnNode(Opcodes.POP));
+                    method.instructions.insertBefore(instruction, new InsnNode(Opcodes.POP));
+                    method.instructions.set(instruction, new InsnNode(Opcodes.LCONST_0));
+                    changed++;
+                    afterSetupField = false;
+                }
+            }
+        }
+        return changed;
+    }}

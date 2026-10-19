@@ -55,7 +55,7 @@ public final class PackBuild {
         RuntimeInfo info = RuntimeInfo.offline(mc, forge, gameDir);
         long start = System.nanoTime();
         OptifinePack pack = OptifinePack.prepare(gameDir, optifine, base, mapping,
-                mapping != null, notes);
+                mapping != null, info.mcVersion, notes);
         long millis = (System.nanoTime() - start) / 1_000_000;
 
         System.out.println("=== notes ===");
