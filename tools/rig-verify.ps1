@@ -60,7 +60,11 @@ if ($JavaHome) { $arguments += @('-JavaHome', $JavaHome) }
 $log = Join-Path $GameDir 'logs\latest.log'
 if (Test-Path $log) {
     $text = Get-Content $log
-    "joined the game     : " + [bool]($text | Select-String -Pattern 'joined the game')
+    # 'joined the game' is not reliable on newer versions: MC 26 logs the join message through a translatable
+    # component, so it comes out localized ("Dev加入了游戏"). PlayerList's "logged in with entity id" is
+    # language independent and appears on every joined run we have seen.
+    $joined = [bool]($text | Select-String -Pattern 'joined the game|logged in with entity id')
+    "joined the game     : " + $joined
     "optifine lines      : " + ($text | Select-String -Pattern '\[OptiFine\]' | Measure-Object).Count
     $forgeLine = @($text | Select-String -Pattern '\[OptiFine\] Forge version:' | Select-Object -Last 1)[0]
     "forge version (OF)  : " + (($forgeLine -as [string]) -replace '^.*Forge version:', '').Trim()

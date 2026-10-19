@@ -398,6 +398,27 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
   artifact，不在索引里），所以 1.21 的修复不受影响——1.21 回归 `joined the game`、161 条、0 崩溃。
 
 26.2 同版复验：315 条 `[OptiFine]`、0 崩溃。
+### 0.9.0：1.21.1 也干净通过（十一路第 7 条 N/A）
+
+`1.21.1 + Forge 52.1.20 + OptiFine J1_pre9`（JDK 21）：`joined the game`、172 条 `[OptiFine]`、**0 崩溃**。
+
+最后两处：
+
+1. **被采纳字段的惰性默认值**：`Direction.getUpdateOrder()` 是从入参（Forge 处理过）并进来的方法，
+   它读的静态字段 `UPDATE_ORDER` 由原版 `<clinit>` 初始化，而我们不并 `<clinit>` → 返回 null。
+   现在合并时为"被采纳方法读取的被采纳字段"插入 `if (FIELD == null) FIELD = <空容器>;` 守卫
+   （数组 → 空数组，`Map` → `HashMap`，`List`/`Collection` → `Collections.emptyList()`）。
+2. **清掉 `final`**：那个字段是 `static final`，从别的（非 `<clinit>`）方法写它会
+   `IllegalAccessError: Update to static final field ... attempted from a different method`，
+   所以加守卫时同时 `& ~ACC_FINAL`。
+
+另外 `tools/rig-verify.ps1` 的"进世界"检测补上了新版本的情况：MC 26 的进服消息走可翻译组件，
+日志里是本地化文本（`Dev加入了游戏`），脚本改为同时认 `logged in with entity id`。
+
+回归：1.21.7（`joined the game`、250 条、0 崩溃）、26.2（`logged in with entity id`、0 崩溃、315 条）。
+
+1.20.1 的进世界仍未成功：**`--quickPlaySingleplayer` 在 Forge 47 下不触发**（日志里只有启动完成，
+没有任何世界加载动作），属于测试环境限制；该线启动本身已验证。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -703,6 +724,27 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
   artifact，不在索引里），所以 1.21 的修复不受影响——1.21 回归 `joined the game`、161 条、0 崩溃。
 
 26.2 同版复验：315 条 `[OptiFine]`、0 崩溃。
+### 0.9.0：1.21.1 也干净通过（十一路第 7 条 N/A）
+
+`1.21.1 + Forge 52.1.20 + OptiFine J1_pre9`（JDK 21）：`joined the game`、172 条 `[OptiFine]`、**0 崩溃**。
+
+最后两处：
+
+1. **被采纳字段的惰性默认值**：`Direction.getUpdateOrder()` 是从入参（Forge 处理过）并进来的方法，
+   它读的静态字段 `UPDATE_ORDER` 由原版 `<clinit>` 初始化，而我们不并 `<clinit>` → 返回 null。
+   现在合并时为"被采纳方法读取的被采纳字段"插入 `if (FIELD == null) FIELD = <空容器>;` 守卫
+   （数组 → 空数组，`Map` → `HashMap`，`List`/`Collection` → `Collections.emptyList()`）。
+2. **清掉 `final`**：那个字段是 `static final`，从别的（非 `<clinit>`）方法写它会
+   `IllegalAccessError: Update to static final field ... attempted from a different method`，
+   所以加守卫时同时 `& ~ACC_FINAL`。
+
+另外 `tools/rig-verify.ps1` 的"进世界"检测补上了新版本的情况：MC 26 的进服消息走可翻译组件，
+日志里是本地化文本（`Dev加入了游戏`），脚本改为同时认 `logged in with entity id`。
+
+回归：1.21.7（`joined the game`、250 条、0 崩溃）、26.2（`logged in with entity id`、0 崩溃、315 条）。
+
+1.20.1 的进世界仍未成功：**`--quickPlaySingleplayer` 在 Forge 47 下不触发**（日志里只有启动完成，
+没有任何世界加载动作），属于测试环境限制；该线启动本身已验证。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

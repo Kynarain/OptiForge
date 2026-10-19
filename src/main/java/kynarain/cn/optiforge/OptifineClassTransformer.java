@@ -4,7 +4,9 @@ import cpw.mods.modlauncher.api.ITransformer;
 import cpw.mods.modlauncher.api.ITransformerVotingContext;
 import cpw.mods.modlauncher.api.TransformerVoteResult;
 import org.objectweb.asm.ClassReader;
+import org.objectweb.asm.Opcodes;
 import org.objectweb.asm.tree.ClassNode;
+import org.objectweb.asm.tree.LabelNode;
 
 import java.util.LinkedHashSet;
 import java.util.Map;
@@ -91,13 +93,17 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         for (org.objectweb.asm.tree.MethodNode method : prepared.methods) {
             methods.add(method.name + method.desc);
         }
+        java.util.List<org.objectweb.asm.tree.MethodNode> adoptedMethods = new java.util.ArrayList<>();
         for (org.objectweb.asm.tree.MethodNode method : incoming.methods) {
             // Never carry over initialisers. OptiFine's payload sometimes turns a vanilla static field
             // into an instance field (BreezeWindLayer.TEXTURE_LOCATION is the measured case); bringing the
             // vanilla <clinit> along then produced "IncompatibleClassChangeError: Expected static field"
             // on the first launch that used the merged class.
             if (method.name.equals("<clinit>") || method.name.equals("<init>")) continue;
-            if (methods.add(method.name + method.desc)) prepared.methods.add(method);
+            if (methods.add(method.name + method.desc)) {
+                prepared.methods.add(method);
+                adoptedMethods.add(method);
+            }
         }
         java.util.Set<String> fields = new java.util.HashSet<>();
         for (org.objectweb.asm.tree.FieldNode field : prepared.fields) {
@@ -110,11 +116,113 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
                 adopted.add(field);
             }
         }
-        // Note: copying <clinit> statements for adopted fields was tried and reverted - deciding where a
-        // statement starts needs a stack simulation, and the label-based heuristic produced
-        // "VerifyError: Operand stack underflow" in ResourceLocation.<clinit>. The adopted field is left
-        // uninitialised instead (1.21.1 then fails later on Direction.getUpdateOrder() == null, which is
-        // recorded in docs/STATE.md as an open issue).
+        // The adopted static fields were initialised by the incoming <clinit>, which is deliberately not
+        // merged (see above). Give the adopted methods a lazy default for the ones they read, so a getter
+        // returns an empty collection instead of null. Measured on 1.21.1: Forge's Direction.getUpdateOrder()
+        // returned null and Level.updateNeighbourForOutputSignal died with
+        // "NullPointerException ... Direction.getUpdateOrder() is null".
+        guardAdoptedFieldReads(prepared, adopted, adoptedMethods);
+    }
+
+    /** Inserts "if (FIELD == null) FIELD = <empty container>;" before each read of an adopted field. */
+    private static void guardAdoptedFieldReads(org.objectweb.asm.tree.ClassNode prepared,
+                                               java.util.List<org.objectweb.asm.tree.FieldNode> adopted,
+                                               java.util.List<org.objectweb.asm.tree.MethodNode> methods) {
+        if (adopted.isEmpty() || methods.isEmpty()) return;
+        java.util.Set<String> names = new java.util.HashSet<>();
+        for (org.objectweb.asm.tree.FieldNode field : adopted) {
+            if (defaultFactory(field.desc) == null) continue; // primitives already default sensibly
+            // The lazy write below happens in getUpdateOrder, not in <clinit>, and writing a static final
+            // field from anywhere else is an IllegalAccessError (measured on 1.21.1:
+            // "Update to static final field Direction.UPDATE_ORDER attempted from a different method").
+            field.access &= ~Opcodes.ACC_FINAL;
+            names.add(field.name + field.desc);
+        }
+        if (names.isEmpty()) return;
+        int guards = 0;
+        for (org.objectweb.asm.tree.MethodNode method : methods) {
+            for (org.objectweb.asm.tree.AbstractInsnNode instruction : method.instructions.toArray()) {
+                if (!(instruction instanceof org.objectweb.asm.tree.FieldInsnNode read)) continue;
+                if (read.getOpcode() != org.objectweb.asm.Opcodes.GETSTATIC) continue;
+                if (!names.contains(read.name + read.desc)) continue;
+                org.objectweb.asm.tree.InsnList guard = new org.objectweb.asm.tree.InsnList();
+                org.objectweb.asm.tree.LabelNode exists = new org.objectweb.asm.tree.LabelNode();
+                guard.add(new org.objectweb.asm.tree.FieldInsnNode(Opcodes.GETSTATIC, prepared.name,
+                        read.name, read.desc));
+                guard.add(new org.objectweb.asm.tree.JumpInsnNode(Opcodes.IFNONNULL, exists));
+                guard.add(defaultFactory(read.desc));
+                guard.add(new org.objectweb.asm.tree.FieldInsnNode(Opcodes.PUTSTATIC, prepared.name,
+                        read.name, read.desc));
+                guard.add(exists);
+                method.instructions.insertBefore(instruction, guard);
+                guards++;
+            }
+        }
+        if (guards > 0) {
+            System.out.println("[OptiForge] guarded " + guards + " read(s) of adopted field(s) in "
+                    + prepared.name);
+        }
+    }
+
+    /** @return instructions that build an empty container for the descriptor, or null when none applies */
+    private static org.objectweb.asm.tree.InsnList defaultFactory(String desc) {
+        org.objectweb.asm.tree.InsnList list = new org.objectweb.asm.tree.InsnList();
+        if (desc.startsWith("[")) {
+            String component = desc.substring(1);
+            list.add(new org.objectweb.asm.tree.InsnNode(Opcodes.ICONST_0));
+            int sort = org.objectweb.asm.Type.getType(component).getSort();
+            if (sort == org.objectweb.asm.Type.OBJECT || sort == org.objectweb.asm.Type.ARRAY) {
+                list.add(new org.objectweb.asm.tree.TypeInsnNode(Opcodes.ANEWARRAY,
+                        component.startsWith("[") ? component : component.substring(1,
+                                component.length() - 1)));
+            } else {
+                String primitive = switch (component.charAt(0)) {
+                    case 'Z' -> "BOOLEAN";
+                    case 'B' -> "BYTE";
+                    case 'C' -> "CHAR";
+                    case 'S' -> "SHORT";
+                    case 'I' -> "INT";
+                    case 'J' -> "LONG";
+                    case 'F' -> "FLOAT";
+                    case 'D' -> "DOUBLE";
+                    default -> "INT";
+                };
+                list.add(new org.objectweb.asm.tree.IntInsnNode(Opcodes.NEWARRAY,
+                        primitiveArrayType(primitive)));
+            }
+            return list;
+        }
+        if (desc.equals("Ljava/util/Map;") || desc.equals("Ljava/util/HashMap;")) {
+            list.add(new org.objectweb.asm.tree.TypeInsnNode(Opcodes.NEW, "java/util/HashMap"));
+            list.add(new org.objectweb.asm.tree.InsnNode(Opcodes.DUP));
+            list.add(new org.objectweb.asm.tree.MethodInsnNode(Opcodes.INVOKESPECIAL, "java/util/HashMap",
+                    "<init>", "()V", false));
+            if (desc.equals("Ljava/util/Map;")) {
+                // HashMap is a Map; nothing else needed
+            }
+            return list;
+        }
+        if (desc.equals("Ljava/util/List;") || desc.equals("Ljava/util/Collection;")
+                || desc.equals("Ljava/lang/Iterable;")) {
+            list.add(new org.objectweb.asm.tree.MethodInsnNode(Opcodes.INVOKESTATIC,
+                    "java/util/Collections", "emptyList", "()Ljava/util/List;", false));
+            return list;
+        }
+        return null;
+    }
+
+    private static int primitiveArrayType(String name) {
+        return switch (name) {
+            case "BOOLEAN" -> Opcodes.T_BOOLEAN;
+            case "BYTE" -> Opcodes.T_BYTE;
+            case "CHAR" -> Opcodes.T_CHAR;
+            case "SHORT" -> Opcodes.T_SHORT;
+            case "INT" -> Opcodes.T_INT;
+            case "LONG" -> Opcodes.T_LONG;
+            case "FLOAT" -> Opcodes.T_FLOAT;
+            case "DOUBLE" -> Opcodes.T_DOUBLE;
+            default -> Opcodes.T_INT;
+        };
     }
 
     /**
