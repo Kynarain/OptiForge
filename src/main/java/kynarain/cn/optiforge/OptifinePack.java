@@ -375,6 +375,15 @@ public final class OptifinePack {
                 }
             }
         }
+        int compatFixed = 0;
+        for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
+            byte[] updated = CompatFixes.apply(entry.getValue(), entry.getKey());
+            if (updated != entry.getValue()) {
+                patched.put(entry.getKey(), updated);
+                compatFixed++;
+            }
+        }
+        notes.append("compat fixes: ").append(compatFixed).append(" class(es)\n");
         notes.append("access transformers re-applied to ").append(widened).append(" class(es)\n");
         notes.append("patched ").append(patched.size()).append(" classes, ")
                 .append(failures.size()).append(" failure(s)\n");        for (int i = 0; i < Math.min(5, failures.size()); i++) {

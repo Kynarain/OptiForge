@@ -8,7 +8,7 @@
 [CmdletBinding()]
 param(
     [string]$Jdk = $(if ($env:JAVA_HOME) { $env:JAVA_HOME } else { 'C:\Program Files\Java\jdk-21' }),
-    [string]$Version = '0.1.0'
+    [string]$Version = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -18,6 +18,13 @@ $root = Split-Path -Parent $PSScriptRoot
 $deps = Join-Path $root 'build\deps'
 $classes = Join-Path $root 'build\classes'
 $libs = Join-Path $root 'build\libs'
+
+# The version comes from gradle.properties so this build and the Gradle build can never disagree.
+if (-not $Version) {
+    $line = Get-Content (Join-Path $root 'gradle.properties') | Where-Object { $_ -match '^mod_version_base=' }
+    if ($line) { $Version = ($line -split '=')[1].Trim() }
+    if (-not $Version) { throw 'mod_version_base is not set in gradle.properties' }
+}
 
 if (-not (Test-Path (Join-Path $deps 'modlauncher-10.0.9.jar'))) {
     & (Join-Path $PSScriptRoot 'fetch-deps.ps1')

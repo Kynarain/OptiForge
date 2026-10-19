@@ -1,6 +1,28 @@
 # STATE — 已经做到哪一步
 
-最后更新：2026-10-19。骨架阶段，**没有可用产物**：`transformers()` 是空的，本工程还没有修过任何东西。
+最后更新：2026-10-20。**0.2.0：管线可用**——在两条线上实测启动并进世界。
+
+## 结论先行（实测）
+
+| 组合 | 启动 | 进世界 | 证据 |
+|---|---|---|---|
+| **1.21 + Forge 51.0.33 + OptiFine `1.21 J1_pre9`（官方标 N/A）** | 是 | **是**（`Dev joined the game`，冷缓存 + 全新实例 + 0.2.0 jar 复验过） | `[OptiFine] Forge version: 51.0.33`、`[OptiFine] Disable Forge light pipeline`、161 条 `[OptiFine]`、0 崩溃报告、stderr 0 字节 |
+| **1.20.1 + Forge 47.4.23 + OptiFine `1.20.1 I6`（官方声明兼容）** | 是 | 未复现（世界未加载，原因待查） | `Setting user`、`Sound engine started`、112 条 `[OptiFine]`、0 崩溃报告、stderr 0 字节；OptiFine 自己在改 Forge 配置 |
+
+`1.21` 那条就是本工程存在的理由：OptiFine 官方把它标成 **not compatible with Forge**，现在通过 OptiForge 能起、能进世界。
+
+## 管线（每个环节都对应一次实测失败）
+
+1. 用户在 `<game>/optiforge/` 放 OptiFine jar（**不能**放 `mods/`）。
+2. `OptifinePatcher` 用 OptiFine 自带的 patcher，以**原版客户端 jar**为基包打全部 440 个补丁类。
+3. `SrgRemap`：运行时是官方名时把 SRG 成员名改写成官方名（`1.21` 需要；`1.20.x` 是 no-op）。
+4. `CollisionFixer`：删掉 OptiFine 额外加的、与官方名撞名的包装方法，把原方法改名占位。
+5. `ForgeAccessTransformers`：重放 Forge 的 AT（成员是 SRG id、方法写成 `name(desc)`、`-f` 去 final），
+   否则 Forge 自己的 `ForgeRenderTypes` 会撞私有字段。
+6. `CompatFixes`：`ShaderInstance.getOrCreate` 里的 `ResourceLocation.withDefaultNamespace` 改成 `parse`，
+   否则 Forge 的 `forge:rendertype_*` 着色器名会被判非法（这就是 1.21 卡住的最后一处）。
+7. 自有类 + assets 打成 `mods/optiforge-optifine-classes.jar`（真正的 javafml mod，ASM 生成带 `@Mod` 的标记类）。
+8. 打包结果按 `sha256(OptiFine)+sha256(base)` 缓存到 `<game>/optiforge/pack/`。
 
 ## 已经做过、并且验证过的
 
@@ -31,33 +53,17 @@
 
 ## 没有做过（不要当成已实现）
 
-- **没有实现任何修复**：`transformers()` 仍然返回空列表。（修法已定：SRG→官方名的成员重映射，DESIGN §4.3。）
-- `1.21.6` / `1.21.7` / `1.21.9` / 26.x 都没有做过真机启动。
-- 无 Release、无 CHANGELOG、无 CI。
+- `1.20.6`、`1.21.3/4/6/7/8/9/10/11`、`26.1.2`、`26.2` 都**没有**实测过；其中 `26.x` 的载荷是官方名、
+  可能是 no-op 管线，但未验证。
+- `1.20.1` 的进世界没有复现（启动成功、世界未加载）；`1.21` 的进世界已复现。
+- 没有 CI；Gradle 构建仍未验证（javac 构建是验证过的）。
 
-## 下一步（M1）
+## 下一步
 
-### 已达成（2026-10-20）
-
-- **1.20.1 + Forge 47.4.23 + OptiFine `1.20.1 I6`（经 OptiForge 接管）→ STARTED**
-  `Setting user`、`Sound engine started`、112 条 `[OptiFine]`、0 崩溃报告、stderr 0 字节；
-  OptiFine 自己在改 Forge 配置（`[OptiFine] Disable Forge light pipeline`、
-  `Set ForgeConfig.CLIENT.experimentalForgeLightPipelineEnabled=false`），即它确实在运行而不是被绕过。
-  这条线是"官方声明兼容"的版本，所以它主要验证管线本身：补丁、SRG/官方名判定（此线为 SRG，重映射 no-op）、
-  Forge AT 重放、自有类交付都对。
-- **1.21 + Forge 51.0.33 + OptiFine `1.21 J1_pre9`（N/A）** → 到 `Sound engine started`、142 条 `[OptiFine]`，
-  随后死在 Forge 注册 core shader：
-  `Invalid shaders/core/rendertype_entity_unlit_translucent.json: Non [a-z0-9/._-] character in path of location: minecraft:forge:rendertype_entity_unlit_translucent`，
-  触发点是 OptiFine 补丁过的 `GameRenderer.reloadShaders` → `ReflectorForge.postModLoaderEvent`。
-
-### 剩余工作
-
-1. **1.21 的 shader 注册问题**：Forge 51 的自有 shader 名字带 `forge:` 前缀，OptiFine 1.21 的着色器补丁把它当成
-   默认命名空间下的路径。需要定位 OptiFine 补丁里构造 `ResourceLocation` 的那一处（`ShaderInstance` 一带），
-   在 transformer 里替换成 `ResourceLocation.parse`，或让 Forge 那条注册走原版路径。
-2. **进世界验收**：`--quickPlaySingleplayer=RigSession` 参数已正确送达（见 launch args），但 150 秒内没有出现
-   integrated server 日志；下一轮查世界复制/超时，或改用 UI 点击自动化。
-3. 把 `1.21.6` / `1.21.7`（载荷官方名）按同一管线测一遍。
+1. `1.20.1` 世界未加载的原因（`--quickPlaySingleplayer=RigSession` 已确认送达；疑似世界副本/超时）。
+2. 按同一管线刷 `1.21.4`、`1.21.8`、`1.21.11`（官方声明兼容，作为回归），再刷 `1.21.6`/`1.21.7`/`1.21.9`
+   与 `26.1.2`（N/A 线）。
+3. 出 `v0.2.0` 的 GitHub Release（jar + 说明：哪条线实测、OptiFine jar 放哪、已知限制）。
 
 ## 下一步（M0，按顺序）
 
