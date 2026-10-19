@@ -67,6 +67,7 @@ pwsh -File tools/build.ps1
 
 ```powershell
 pwsh -File tools/build.ps1          # javac + jar，已验证
+pwsh -File tools/check.ps1          # 验证 Forge 会发现这个 jar（离线，不启动游戏）
 .\gradlew build                     # 同一份产物，Gradle 版（首次要下载发行包）
 ```
 
