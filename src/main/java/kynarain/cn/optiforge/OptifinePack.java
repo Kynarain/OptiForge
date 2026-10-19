@@ -86,6 +86,15 @@ public final class OptifinePack {
     public static final java.util.Set<String> RESOURCE_PREFIXES = java.util.Set.of("assets/");
 
     /**
+     * Modules found in the layers that are parents of the mod layer (Forge's own, plus their libraries).
+     *
+     * <p>An explicit module descriptor has to name what it reads; these names are observed at launch, so a
+     * hard {@code requires} can never point at a module the line does not have. The game module is
+     * deliberately not listed: it lives in a <b>child</b> layer and Forge grants that read at runtime.
+     */
+    public static volatile java.util.List<String> parentModules = java.util.List.of();
+
+    /**
      * URL for one of OptiFine's own classes.
      *
      * <p>ModLauncher hands the locator a name ending in {@code .class} (from
@@ -465,7 +474,14 @@ public final class OptifinePack {
             // modules exporting the same package. A plain javafml mod is mounted with the other mods and
             // sees the patched classes. The @Mod annotation is generated here because OptiForge itself
             // must not compile against Forge.
-            put(out, "optiforge/generated/GeneratedMod.class", generatedModClass());
+            // Optional explicit module descriptor. Measured on Forge 56: the staged automatic module
+            // does not read net.minecraftforge.eventbus, and OptiFine's Reflector references
+            // net.minecraftforge.eventbus.api.Event directly, so the launch dies with
+            // NoClassDefFoundError. "requires static" asks for the Forge modules without making the
+            // layer fail when a line does not have one.
+            if (Boolean.getBoolean("optiforge.moduleInfo")) {
+                put(out, "module-info.class", moduleDescriptor());
+            }            put(out, "optiforge/generated/GeneratedMod.class", generatedModClass());
             int stagedClasses = 0;
             if (stageClasses) {
                 for (Map.Entry<String, Path> entry : own.entrySet()) {
@@ -673,4 +689,41 @@ public final class OptifinePack {
                 + " [" + renamedTokens + " renamed, " + unmappedTokens + " unmapped], base "
                 + baseJar.getFileName();
     }
-}
+
+    /**
+     * A module descriptor for the staged jar: open (FML reflects on the generated @Mod class) and
+     * requires the Forge modules as optional, so a missing name cannot break layer resolution.
+     */
+    static byte[] moduleDescriptor() {
+        org.objectweb.asm.ClassWriter writer = new org.objectweb.asm.ClassWriter(0);
+        writer.visit(org.objectweb.asm.Opcodes.V17, org.objectweb.asm.Opcodes.ACC_MODULE,
+                "module-info", null, null, null);
+        var visitor = writer.visitModule("optiforge_optifine_classes", org.objectweb.asm.Opcodes.ACC_OPEN, null);
+        visitor.visitRequire("java.base", org.objectweb.asm.Opcodes.ACC_MANDATED, null);
+        // Hard requires for the Forge modules that live in a parent layer of the mod layer. The names
+        // are stable across Forge 56+ (the first line where eventbus became its own module); the list
+        // stays opt-in behind -Doptiforge.moduleInfo=true so a line without one cannot be broken by it.
+        for (String module : new String[]{"net.minecraftforge.eventbus", "net.minecraftforge.forgespi",
+                "net.minecraftforge.fmlloader", "net.minecraftforge.coremod", "net.minecraftforge.mergetool.api",
+                "net.minecraftforge.earlydisplay", "org.apache.logging.log4j",
+                "org.apache.logging.log4j.core"}) {
+            visitor.visitRequire(module, 0, null);
+        }
+        for (String module : new String[]{"minecraft", "net.minecraftforge.forge",
+                "net.minecraftforge.eventbus", "net.minecraftforge.fmlcore", "net.minecraftforge.fmlloader",
+                "net.minecraftforge.coremod", "net.neoforged.bus", "net.neoforged.neoforge",
+                // libraries OptiFine's own classes use; an explicit module does not inherit the
+                // automatic "read everything" behaviour, so each one has to be named.
+                "org.apache.logging.log4j", "org.slf4j", "com.google.gson", "com.google.common",
+                "org.objectweb.asm", "org.objectweb.asm.tree", "it.unimi.dsi.fastutil", "datafixerupper",
+                "brigadier", "authlib", "org.joml", "org.lwjgl", "org.lwjgl.opengl"}) {
+            // ACC_STATIC_PHASE (0x40), not ACC_STATIC (0x20, which is ACC_TRANSITIVE here): only the
+            // former makes the dependency optional at runtime, and a line without (say) NeoForge must
+            // not fail layer resolution - measured: without it, "Module net.neoforged.neoforge not
+            // found, required by optiforge_optifine_classes".
+            visitor.visitRequire(module, org.objectweb.asm.Opcodes.ACC_STATIC_PHASE, null);
+        }
+        visitor.visitEnd();
+        writer.visitEnd();
+        return writer.toByteArray();
+    }}

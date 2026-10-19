@@ -86,6 +86,31 @@ OptiFine 26.x 的 `Options.loadOfOptions` 在 `optionsof.txt` 缺失时 AIOOBE�
 
 3. 该注入默认开启但对已验证线无副作用：1.21 回归跑过——`Setting user`、`Sound engine started`、
    `Dev joined the game`、0 崩溃、161 条 `[OptiFine]`。开关：`-Doptiforge.moduleReads=false`。
+### 本轮新增的实测事实（1.21.6 / Forge 56）
+
+- **模块分层**（`-Doptiforge.layerDump=true` 打印）：
+  `SERVICE` 91 个模块（含 `net.minecraftforge.eventbus`、`net.minecraftforge.forgespi`、`net.minecraftforge.fmlloader`、
+  `org.apache.logging.log4j`…），`PLUGIN` 4 个（`fmlcore`/`javafmlmod`/`lowcodemod`/`mclanguageprovider`），
+  `GAME` 4 个（**`minecraft`**、`net.minecraftforge.forge` 等）。我们的 staged mod 在 `PLUGIN`，
+  失败点是**它读不到 `SERVICE` 层的 `eventbus`**（`Reflector.<clinit>` 直接引用 `Event`）。
+- `ModuleLayer` **没有 `parent()`**，只有 `parents()`（返回 `List`）。之前注入代码里用了 `parent()`，
+  `NoSuchMethodError` 被 try/catch 吞掉，所以"注入跑了但没效果"。已改。
+- **FML 不接受带 `module-info` 的 mod jar**：`AbstractModProvider` 报
+  `Failed to parse ... module-info`，于是整个 staged jar 被丢弃 → 立刻出现
+  `NoClassDefFoundError: net/optifine/util/MathUtils`。所以"给 mod jar 加显式模块描述符"这条路是死的
+  （已确认不是写法问题）。
+- `additionalClassesLocator` 在 Forge 51/56 的 ForgeBootstrap 启动下**从未被调用**（两代日志都没有
+  `additionalClassesLocator() requested`）。
+
+### 下一步（模块可见性）
+
+1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
+   `net/minecraftforge/**`、`net/neoforged/**` 的类字面量（`LDC Type`）换成
+   `Class.forName` + 捕获异常的形式（OptiFine 的 Reflector 本来就把"类不存在"当正常情况），
+   这样 `Reflector.<clinit>` 不会因为读不到 `Event` 而失败。
+2. 或者让 staged jar 走 SERVICE 层（classpath 上的变换服务 jar），避开 mod 层的读边限制——但要注意
+   之前的 split package/export 报错。
+3. 26.x 还有 Java 25、`optionsof.txt`、`optifine/**`（`OptiFineResourceLocator`）三件事。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

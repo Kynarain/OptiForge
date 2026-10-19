@@ -59,6 +59,7 @@ public final class OptiForgeService implements ITransformationService {
     public void initialize(IEnvironment environment) {
         try {
             OptiForgeService.environment = environment;
+            rememberParentModules(environment);
             if (gameDir == null) {
                 gameDir = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).orElse(null);
             }
@@ -157,6 +158,36 @@ public final class OptiForgeService implements ITransformationService {
         }
     }
 
+    /**
+     * Records which Forge/libraries modules sit in the layers that are parents of the mod layer, so the
+     * staged jar's module descriptor can require exactly those (see OptifinePack.parentModules).
+     */
+    private static void rememberParentModules(IEnvironment environment) {
+        try {
+            java.util.List<String> names = new java.util.ArrayList<>();
+            environment.findModuleLayerManager().ifPresent(manager -> manager
+                    .getLayer(cpw.mods.modlauncher.api.IModuleLayerManager.Layer.GAME)
+                    .ifPresent(game -> {
+                        java.util.List<java.lang.ModuleLayer> parents = game.parents();
+                        for (java.lang.ModuleLayer parent : parents) {
+                            for (java.lang.Module module : parent.modules()) {
+                                String name = module.getName();
+                                if (name.startsWith("net.minecraftforge") || name.startsWith("net.neoforged")
+                                        || name.startsWith("org.apache.logging.log4j")
+                                        || name.equals("org.slf4j")) {
+                                    names.add(name);
+                                }
+                            }
+                        }
+                    }));
+            if (!names.isEmpty()) {
+                OptifinePack.parentModules = java.util.List.copyOf(names);
+                System.out.println("[OptiForge] parent modules: " + names);
+            }
+        } catch (Throwable t) {
+            System.out.println("[OptiForge] parent module discovery failed: " + t);
+        }
+    }
     /**
      * Installs the module reads the first time a class is actually transformed: the GAME layer (which
      * owns the minecraft module) does not exist yet when initialize()/onLoad() run, so the earlier

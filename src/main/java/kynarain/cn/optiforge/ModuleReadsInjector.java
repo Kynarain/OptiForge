@@ -77,7 +77,10 @@ public final class ModuleReadsInjector {
         return writer.toByteArray();
     }
 
-    /** {@code Module self = Host.class.getModule(); for (layer = self.getLayer(); layer != null; layer = layer.parent()) addReadsInLayer(layer, self);} */
+    /** {@code for (ModuleLayer cur = self.getLayer(), depth = 0; cur != null && depth < 4; depth++) { addReadsInLayer(cur, self); cur = cur.parents().isEmpty() ? null : (ModuleLayer) cur.parents().get(0); }}
+     *  ModuleLayer has {@code parents()} (a List), not {@code parent()} - using the non-existent one
+     *  threw NoSuchMethodError from inside the try/catch, which is why an earlier version "ran" and
+     *  changed nothing. */
     private static MethodNode buildInstaller(String owner) {
         MethodNode method = new MethodNode(Opcodes.ACC_PRIVATE | Opcodes.ACC_STATIC | Opcodes.ACC_SYNTHETIC,
                 INSTALL, "()V", null, null);
@@ -86,34 +89,58 @@ public final class ModuleReadsInjector {
         LabelNode tryEnd = new LabelNode();
         LabelNode handler = new LabelNode();
         LabelNode loop = new LabelNode();
+        LabelNode noParent = new LabelNode();
+        LabelNode afterParent = new LabelNode();
         LabelNode done = new LabelNode();
 
         code.add(tryStart);
-        // marker: proves the injected code actually runs (and when)
-        code.add(new InsnNode(Opcodes.NOP));
-        code.add(new org.objectweb.asm.tree.FieldInsnNode(Opcodes.GETSTATIC, "java/lang/System", "out", "Ljava/io/PrintStream;"));
+        code.add(new org.objectweb.asm.tree.FieldInsnNode(Opcodes.GETSTATIC, "java/lang/System", "out",
+                "Ljava/io/PrintStream;"));
         code.add(new LdcInsnNode("[OptiForge] injected module-read installer running"));
-        code.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println", "(Ljava/lang/String;)V", false));
+        code.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/io/PrintStream", "println",
+                "(Ljava/lang/String;)V", false));
+        // Module self = Host.class.getModule(); ModuleLayer cur = self.getLayer(); int depth = 0;
         code.add(new LdcInsnNode(Type.getObjectType(owner)));
         code.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Class", "getModule",
                 "()Ljava/lang/Module;", false));
-        code.add(new VarInsnNode(Opcodes.ASTORE, 1)); // self
+        code.add(new VarInsnNode(Opcodes.ASTORE, 1));
         code.add(new VarInsnNode(Opcodes.ALOAD, 1));
         code.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/Module", "getLayer",
                 "()Ljava/lang/ModuleLayer;", false));
-        code.add(new VarInsnNode(Opcodes.ASTORE, 2)); // layer
+        code.add(new VarInsnNode(Opcodes.ASTORE, 2));
+        code.add(new InsnNode(Opcodes.ICONST_0));
+        code.add(new VarInsnNode(Opcodes.ISTORE, 3));
 
         code.add(loop);
         code.add(new VarInsnNode(Opcodes.ALOAD, 2));
         code.add(new JumpInsnNode(Opcodes.IFNULL, done));
+        code.add(new VarInsnNode(Opcodes.ILOAD, 3));
+        code.add(new InsnNode(Opcodes.ICONST_4));
+        code.add(new JumpInsnNode(Opcodes.IF_ICMPGE, done));
         code.add(new VarInsnNode(Opcodes.ALOAD, 2));
         code.add(new VarInsnNode(Opcodes.ALOAD, 1));
         code.add(new MethodInsnNode(Opcodes.INVOKESTATIC, owner, IN_LAYER,
                 "(Ljava/lang/ModuleLayer;Ljava/lang/Module;)V", false));
+        // List parents = cur.parents();
         code.add(new VarInsnNode(Opcodes.ALOAD, 2));
-        code.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/ModuleLayer", "parent",
-                "()Ljava/lang/ModuleLayer;", false));
+        code.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, "java/lang/ModuleLayer", "parents",
+                "()Ljava/util/List;", false));
+        code.add(new VarInsnNode(Opcodes.ASTORE, 4));
+        code.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        code.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/List", "isEmpty", "()Z", true));
+        code.add(new JumpInsnNode(Opcodes.IFNE, noParent));
+        code.add(new VarInsnNode(Opcodes.ALOAD, 4));
+        code.add(new InsnNode(Opcodes.ICONST_0));
+        code.add(new MethodInsnNode(Opcodes.INVOKEINTERFACE, "java/util/List", "get",
+                "(I)Ljava/lang/Object;", true));
+        code.add(new TypeInsnNode(Opcodes.CHECKCAST, "java/lang/ModuleLayer"));
         code.add(new VarInsnNode(Opcodes.ASTORE, 2));
+        code.add(new JumpInsnNode(Opcodes.GOTO, afterParent));
+        code.add(noParent);
+        code.add(new InsnNode(Opcodes.ACONST_NULL));
+        code.add(new VarInsnNode(Opcodes.ASTORE, 2));
+        code.add(afterParent);
+        code.add(new org.objectweb.asm.tree.IincInsnNode(3, 1));
         code.add(new JumpInsnNode(Opcodes.GOTO, loop));
 
         code.add(tryEnd);
@@ -124,11 +151,10 @@ public final class ModuleReadsInjector {
         code.add(new InsnNode(Opcodes.RETURN));
 
         method.tryCatchBlocks.add(new TryCatchBlockNode(tryStart, tryEnd, handler, "java/lang/Throwable"));
-        method.maxLocals = 3;
-        method.maxStack = 3;
+        method.maxLocals = 5;
+        method.maxStack = 4;
         return method;
     }
-
     /** {@code for (m : layer.modules()) try { self.addReads(m); } catch (Throwable ignored) {} }
      *  No name guessing: the module names differ between Forge lines, and adding a read to a module
      *  the game already reads is a no-op. */

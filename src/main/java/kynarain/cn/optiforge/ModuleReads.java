@@ -10,17 +10,16 @@ import java.util.List;
 /**
  * Gives the game module the module reads OptiFine's patches need.
  *
- * <p>Measured on Forge 56.0.9 + OptiFine 1.21.6: the launch dies with
- * {@code NoClassDefFoundError: net.minecraftforge.eventbus.api.Event} from a patched game class. In
- * vanilla Forge the same game classes reference Forge types ({@code DefaultVertexFormat implements
- * IForgeVertexFormat}) and work, so {@code minecraft} does read the {@code forge} module - but
- * {@code net.minecraftforge.eventbus} is a <b>separate</b> module in Forge 56, and {@code minecraft}
- * does not read it. OptiFine 1.21.6's patched classes reference {@code Event} directly. (Forge 51 kept
- * eventbus inside the forge module, which is why the 1.21 line worked.)
+ * <p>Measured on Forge 56.0.9 + OptiFine 1.21.6: the launch needed
+ * {@code net.minecraftforge.eventbus.api.Event} from OptiFine's own {@code Reflector}, and Forge 56 keeps
+ * eventbus in a module of its own. Forge 51 bundled eventbus into the forge module, which is why the 1.21
+ * line never hit this.
  *
- * <p>{@link Module#addReads(Module)} refuses callers outside the module, so the internal
- * {@code implAddReads} is used; that needs {@code --add-opens java.base/java.lang}. Whether the launch
- * grants that to the unnamed module is measured at runtime and reported, never assumed.
+ * <p><b>This class can only report.</b> {@code Module.addReads} refuses callers outside the module being
+ * changed and the launch does not open {@code java.base/java.lang}, so the read has to be added from
+ * inside the game module - see {@link ModuleReadsInjector}. What runs here is the diagnosis: which layers
+ * exist, which module is the game, and what the reflective attempt says (it is expected to fail with
+ * {@code InaccessibleObjectException}, and recording that is the point).
  */
 public final class ModuleReads {
 
@@ -37,23 +36,39 @@ public final class ModuleReads {
         });
         if (layers.isEmpty()) return "module reads: no module layers available";
 
-        Module minecraft = null;
+        if (Boolean.getBoolean("optiforge.layerDump")) {
+            for (ModuleLayer layer : layers) {
+                StringBuilder line = new StringBuilder();
+                for (Module module : layer.modules()) {
+                    String name = module.getName();
+                    if (name.startsWith("net.minecraft") || name.startsWith("net.neoforged")
+                            || name.startsWith("org.apache.logging") || name.equals("minecraft")) {
+                        line.append(name).append("  ");
+                    }
+                }
+                System.out.println("[OptiForge] layer modules=" + layer.modules().size()
+                        + " parents=" + layer.parents().size() + " :: " + line);
+            }
+        }
+
+        Module game = null;
         List<Module> forgeModules = new ArrayList<>();
-        List<String> names = new ArrayList<>();
         for (ModuleLayer layer : layers) {
             for (Module module : layer.modules()) {
                 String name = module.getName();
-                if (names.size() < 24) names.add(name);
-                // Forge renames the game module; identify it by the packages it owns rather than by name.
-                if (module.getDescriptor() != null && module.getDescriptor().packages().contains("net.minecraft")) minecraft = module;
-                else if (name.equals("minecraft")) minecraft = module;
-                else if (name.startsWith("net.minecraftforge") || name.startsWith("net.neoforged")) {
+                if (module.getDescriptor() != null
+                        && module.getDescriptor().packages().contains("net.minecraft")) {
+                    game = module;
+                } else if (name.equals("minecraft")) {
+                    game = module;
+                } else if (name.startsWith("net.minecraftforge") || name.startsWith("net.neoforged")) {
                     forgeModules.add(module);
                 }
             }
         }
-        if (minecraft == null) return "module reads: could not identify the game module among " + names;
-        if (forgeModules.isEmpty()) return "module reads: no Forge modules found";
+        if (game == null) {
+            return "module reads: could not identify the game module across " + layers.size() + " layers";
+        }
 
         Method implAddReads;
         try {
@@ -61,14 +76,15 @@ public final class ModuleReads {
             implAddReads.setAccessible(true);
         } catch (Throwable t) {
             return "module reads: cannot reach Module.implAddReads (" + t.getClass().getSimpleName()
-                    + ": " + t.getMessage() + "); the launch does not open java.base/java.lang";
+                    + ": " + t.getMessage() + "); the launch does not open java.base/java.lang, so the"
+                    + " read has to come from injected game-module code";
         }
 
         List<String> added = new ArrayList<>();
         for (Module candidate : forgeModules) {
-            if (minecraft.canRead(candidate)) continue;
+            if (game.canRead(candidate)) continue;
             try {
-                implAddReads.invoke(minecraft, candidate);
+                implAddReads.invoke(game, candidate);
                 added.add(candidate.getName());
             } catch (Throwable t) {
                 return "module reads: failed to add " + candidate.getName() + " (" + t.getCause() + ")";
@@ -77,5 +93,4 @@ public final class ModuleReads {
         return "module reads: game module now reads " + added + " (already read "
                 + (forgeModules.size() - added.size()) + ")";
     }
-
 }
