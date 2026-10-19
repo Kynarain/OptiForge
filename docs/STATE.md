@@ -23,6 +23,11 @@
 | 载荷成员命名空间实测：`1.20.x`/`1.21` = SRG；`1.21.1`+ = 官方名 | 完成 | DESIGN §4.2 的表 |
 | `data/mappings/1.21-srg-to-official.tsv`（75 196 行） | 完成 | `tools/build-srg-map.ps1` join `joined.tsrg` + `obf-official-1.21.tsrg`；抽查 `m_127521_ → forThrowable`、`f_127499_ → LOGGER` |
 | `SrgRemap`（常量池级重命名） | 完成，离线验证 | 对 1.21 `CrashReport`：补丁 MD5 匹配 → 重命名 34 个记号、0 个未映射 → `javap` 里出现 `forThrowable(Throwable, String)` 与 `LOGGER` |
+| **接管管线（optiforge/ 里的 jar → 补丁 → 重映射 → Forge AT → 交付）** | 完成，真机跑通 | `[OptiFine] Forge version: 51.0.33`、`Sound engine started`、137 条 `[OptiFine]`、着色器子系统与资源重载都到了 |
+| 碰撞处理（SRG 名与 OptiFine 加的官方名包装同名） | 完成 | `ModelPart` 保住 `m_171324_` + `getChild` 两个方法，不再 `Duplicate method name` |
+| Forge 访问转换器的重放 | 完成 | 335 条授权，10 个类被放宽；修掉 `RenderStateShard.setupState`、`RenderType.create` 的 `IllegalAccessError` |
+| 自有类以 javafml mod 形式交付（生成 `@Mod` + 构造器） | 完成 | 否则 `NoClassDefFoundError: net/optifine/util/MathUtils`（LIBRARY 形态进 PLUGIN 层，看的是未变换的游戏类） |
+| 运行时命名空间探测（从 classpath 里的 `CrashReport.class` 判断） | 完成 | 不再依赖版本号猜 SRG/官方名 |
 
 ## 没有做过（不要当成已实现）
 
@@ -32,20 +37,16 @@
 
 ## 下一步（M1）
 
-1. ~~生成 `1.21` 的 `SRG 名 → 官方名` 全局表~~ —— 完成，75 196 行。
-2. ~~实现重映射~~ —— `SrgRemap` 已能在离线把补丁产物改成官方名（已验证 `CrashReport`）。
-3. **把它接到服务里**。方案已由实测定死：走**接管**（OptiFabric 同构），不做"只在 OptiFine 之后加
-   transformer"——因为 `1.21` 的 346 个 `srg/net/optifine/**` 类本身带 SRG 引用，而它们是经 OptiFine 的
-   `additionalClassesLocator()` 直接进类加载器的，**不过 transformer**（DESIGN §4.3）。具体：
-   1. OptiFine jar 移到 `mods/` 之外（例如实例目录下 `optiforge/OptiFine_*.jar`）；
-   2. 启动时 `OptifinePatcher` 打补丁、`SrgRemap` 重映射，结果按 `sha256(jar)+mc+forge` 缓存；
-   3. `transformers()` 交付打过补丁的游戏类，`additionalClassesLocator()` 交付重映射后的 `net/optifine/**`，
-      `additionalResourcesLocator()` 交付 `assets/**`；
-   4. 打补丁需要的基包（原版客户端 jar）从 classpath 里找 `versions/<mc>/<mc>.jar`，找不到就用
-      `-Doptiforge.vanilla=` 指定。
-4. 用同一套 rig 复跑 `1.21 + Forge 51.0.33 + J1_pre9`，验收信号与 1.21.1 一致：
-   `Setting user`、`Sound engine started`、`joined`、0 崩溃报告。
-5. 再按同一方法测 `1.21.6` / `1.21.7`（载荷是官方名，本该不需要重映射——N/A 的原因可能是别的，需要实测）。
+当前阻塞：启动到 `Sound engine started` 之后，在 `BlockEntityRenderers.createEntityRenderers` 里
+`Failed to create model for minecraft:skull` → `DragonHeadModel.<init>` 拿不到 `head` 子部件（`NullPointerException`）。
+最可能的原因：OptiFine 的 `patch/assets/**`（1613 条 xdelta，改的是原版模型 json）还没有应用——我们只把
+OptiFine 自带的 assets 打进了 mod jar，没有把它的补丁套到游戏资源上。
+
+1. 实现 `patch/assets/**` 的应用：用同一个 `Patcher`，基包是 vanilla 的 assets（客户端 jar / `assets/` 目录），
+   产出走 `additionalResourcesLocator` 或资源包。
+2. 复跑 `1.21 + Forge 51.0.33`，验收：`Setting user`、`Sound engine started`、能进世界、0 崩溃报告。
+3. 换更小的目标做回归：`1.20.1 + Forge 47.4.23`（载荷同为 SRG，但运行时也是 SRG，重映射应为 no-op）。
+4. 把 `1.21.6` / `1.21.7`（载荷官方名）按同一管线测一遍。
 
 ## 下一步（M0，按顺序）
 
