@@ -321,6 +321,22 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 
 顺带确认：1.21.1 的基包本来就选的是 `1.21.1-forge-52.1.20.jar`（Forge 的 client jar），不是原版 jar——
 `findBaseJar` 现在也显式优先 Forge client jar（对其它线无影响）。
+### 26.2 也测了（本轮）：能启动 + 进世界，随后崩；两处尝试已回退
+
+- `26.2 + Forge 65.1.5 + OptiFine K2_pre4`（JDK 25）：`Setting user`、`Sound engine started`、
+  192~200 条 `[OptiFine]`、`Dev joined the game`（世界用 Forge 26.2 专用服务器生成）。
+- 进世界后客户端崩 `IllegalAccessError: LevelExtractor tried to access private method
+  LevelRenderer.weatherEffectRenderer`——Forge 26.2 的 AT 里有收窄行
+  `private-f net.minecraft.client.renderer.LevelRenderer weatherEffectRenderer`，我们原样应用后把方法变成 private。
+  - 尝试"AT 只放宽不收窄"：26.2 的这个错消失了，但**已验证的 1.21.7 立刻回归**（1 崩溃、进不了世界），
+    所以已回退。正确做法是按行/按版本判断哪条收窄是给同包调用者用的，而不是全局策略。
+  - 修好 AT 之后 26.2 的下一个错变成 `NoSuchMethodError: Gui.popLayer()`（`Screen.onClose` → `Gui`），
+    与我们替换 `Gui` 后丢掉 Forge 运行时补的方法同类。
+- 1.21.1 的 `<clinit>` 字段初始化合并也试过：抽取语句时用"行号标签"当边界不成立，
+  在 `ResourceLocation.<clinit>` 产生 `VerifyError: Operand stack underflow`，已回退。正确做法需要
+  **栈模拟**来确定语句起点。
+
+两处实验都已回退，`tools/build.ps1` / 1.21.7 回归通过（`joined the game`、0 崩溃）。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -549,6 +565,22 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 
 顺带确认：1.21.1 的基包本来就选的是 `1.21.1-forge-52.1.20.jar`（Forge 的 client jar），不是原版 jar——
 `findBaseJar` 现在也显式优先 Forge client jar（对其它线无影响）。
+### 26.2 也测了（本轮）：能启动 + 进世界，随后崩；两处尝试已回退
+
+- `26.2 + Forge 65.1.5 + OptiFine K2_pre4`（JDK 25）：`Setting user`、`Sound engine started`、
+  192~200 条 `[OptiFine]`、`Dev joined the game`（世界用 Forge 26.2 专用服务器生成）。
+- 进世界后客户端崩 `IllegalAccessError: LevelExtractor tried to access private method
+  LevelRenderer.weatherEffectRenderer`——Forge 26.2 的 AT 里有收窄行
+  `private-f net.minecraft.client.renderer.LevelRenderer weatherEffectRenderer`，我们原样应用后把方法变成 private。
+  - 尝试"AT 只放宽不收窄"：26.2 的这个错消失了，但**已验证的 1.21.7 立刻回归**（1 崩溃、进不了世界），
+    所以已回退。正确做法是按行/按版本判断哪条收窄是给同包调用者用的，而不是全局策略。
+  - 修好 AT 之后 26.2 的下一个错变成 `NoSuchMethodError: Gui.popLayer()`（`Screen.onClose` → `Gui`），
+    与我们替换 `Gui` 后丢掉 Forge 运行时补的方法同类。
+- 1.21.1 的 `<clinit>` 字段初始化合并也试过：抽取语句时用"行号标签"当边界不成立，
+  在 `ResourceLocation.<clinit>` 产生 `VerifyError: Operand stack underflow`，已回退。正确做法需要
+  **栈模拟**来确定语句起点。
+
+两处实验都已回退，`tools/build.ps1` / 1.21.7 回归通过（`joined the game`、0 崩溃）。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

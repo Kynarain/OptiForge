@@ -179,6 +179,10 @@ public final class ForgeAccessTransformers {
     }
 
     private static int widen(int access, int newAccess, boolean clearFinal) {
+        // Applies the requested visibility exactly. Making this widen-only was tried for 26.2 (whose config
+        // has "private-f net.minecraft.client.renderer.LevelRenderer weatherEffectRenderer", which broke a
+        // same-package caller): it fixed that one error but regressed the verified 1.21.7 line instead, so
+        // the exact behaviour is kept and the 26.2 case stays documented in docs/STATE.md.
         int result = (access & ~(Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED | Opcodes.ACC_PRIVATE)) | newAccess;
         return clearFinal ? (result & ~Opcodes.ACC_FINAL) : result;
     }

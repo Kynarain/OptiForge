@@ -81,9 +81,89 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         for (org.objectweb.asm.tree.FieldNode field : prepared.fields) {
             fields.add(field.name + field.desc);
         }
+        java.util.List<org.objectweb.asm.tree.FieldNode> adopted = new java.util.ArrayList<>();
         for (org.objectweb.asm.tree.FieldNode field : incoming.fields) {
-            if (fields.add(field.name + field.desc)) prepared.fields.add(field);
+            if (fields.add(field.name + field.desc)) {
+                prepared.fields.add(field);
+                adopted.add(field);
+            }
         }
+        // Note: copying <clinit> statements for adopted fields was tried and reverted - deciding where a
+        // statement starts needs a stack simulation, and the label-based heuristic produced
+        // "VerifyError: Operand stack underflow" in ResourceLocation.<clinit>. The adopted field is left
+        // uninitialised instead (1.21.1 then fails later on Direction.getUpdateOrder() == null, which is
+        // recorded in docs/STATE.md as an open issue).
+    }
+
+    /**
+     * Copies the incoming {@code <clinit>} statements that initialise fields we just adopted.
+     *
+     * <p>Measured on 1.21.1: Forge's Mixin adds {@code Direction.getUpdateOrder()} plus the data it reads,
+     * but the data is filled by a statement in {@code <clinit>}. Adopting only the field left the getter
+     * returning null and the world died with
+     * {@code NullPointerException: ... Direction.getUpdateOrder() is null}. The initialising statement is
+     * taken together with its preceding line-number label, which is how javac delimits statements; when
+     * there is no such label the copy starts at the closest preceding label instead.
+     *
+     * <p>A whole {@code <clinit>} is deliberately never merged: it would run the vanilla initialisers a
+     * second time, which is how {@code IncompatibleClassChangeError: Expected static field} appeared before.
+     */
+    private static void carryOverInitialisers(org.objectweb.asm.tree.ClassNode incoming,
+                                              org.objectweb.asm.tree.ClassNode prepared,
+                                              java.util.List<org.objectweb.asm.tree.FieldNode> adopted) {
+        org.objectweb.asm.tree.MethodNode source = null;
+        org.objectweb.asm.tree.MethodNode target = null;
+        for (org.objectweb.asm.tree.MethodNode method : incoming.methods) {
+            if (method.name.equals("<clinit>")) source = method;
+        }
+        for (org.objectweb.asm.tree.MethodNode method : prepared.methods) {
+            if (method.name.equals("<clinit>")) target = method;
+        }
+        if (source == null) return;
+        if (target == null) {
+            target = new org.objectweb.asm.tree.MethodNode(org.objectweb.asm.Opcodes.ACC_STATIC,
+                    "<clinit>", "()V", null, null);
+            target.instructions.add(new org.objectweb.asm.tree.InsnNode(org.objectweb.asm.Opcodes.RETURN));
+            prepared.methods.add(target);
+        }
+        java.util.Set<String> wanted = new java.util.HashSet<>();
+        for (org.objectweb.asm.tree.FieldNode field : adopted) {
+            wanted.add(field.name + field.desc);
+        }
+
+        java.util.List<org.objectweb.asm.tree.AbstractInsnNode> batch = new java.util.ArrayList<>();
+        org.objectweb.asm.tree.AbstractInsnNode start = null;
+        org.objectweb.asm.tree.AbstractInsnNode cursor = source.instructions.getFirst();
+        while (cursor != null) {
+            if (cursor instanceof org.objectweb.asm.tree.LineNumberNode
+                    || cursor instanceof org.objectweb.asm.tree.LabelNode
+                    || cursor instanceof org.objectweb.asm.tree.FrameNode) {
+                start = cursor;
+            }
+            if (cursor instanceof org.objectweb.asm.tree.FieldInsnNode put
+                    && put.getOpcode() == org.objectweb.asm.Opcodes.PUTSTATIC
+                    && wanted.contains(put.name + put.desc)
+                    && start != null) {
+                for (org.objectweb.asm.tree.AbstractInsnNode copy = start;
+                        copy != null && copy != cursor.getNext(); copy = copy.getNext()) {
+                    batch.add(copy);
+                }
+                wanted.remove(put.name + put.desc);
+            }
+            cursor = cursor.getNext();
+        }
+        if (batch.isEmpty()) return;
+
+        org.objectweb.asm.tree.AbstractInsnNode insertAt = target.instructions.getLast();
+        if (insertAt == null) {
+            insertAt = new org.objectweb.asm.tree.InsnNode(org.objectweb.asm.Opcodes.RETURN);
+            target.instructions.add(insertAt);
+        }
+        for (org.objectweb.asm.tree.AbstractInsnNode instruction : batch) {
+            target.instructions.insertBefore(insertAt, instruction);
+        }
+        System.out.println("[OptiForge] carried over " + batch.size() + " initialiser instruction(s) for "
+                + adopted.size() + " adopted field(s) in " + prepared.name);
     }
 
     @Override
