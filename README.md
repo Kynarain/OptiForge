@@ -2,13 +2,13 @@
 
 > OptiFine on Forge, with Forge Mod Loader loaded alongside.
 
-版本号遵循 SemVer（当前 `0.5.0`，见 `gradle.properties` 的 `mod_version_base`）。
+版本号遵循 SemVer（当前 `0.6.0`，见 `gradle.properties` 的 `mod_version_base`）。
 
 在 **Forge** 上加载 **OptiFine** 的模组 —— 和 OptiFabric 在 Fabric 上做的事一样，只是目标换成 Forge。
 重点是那些 OptiFine 官方标成 **`Forge N/A`（not compatible with Forge）** 的构建：`1.21`、`1.21.6`、
 `1.21.7`、`1.21.9`、`26.1.2`、`26.2` 整条线都是 N/A。
 
-## 实测结果（0.5.0）
+## 实测结果（0.6.0）
 
 七条 1.21.x 版本线、Forge 51→61，全部启动并进世界（`Dev joined the game`、0 崩溃报告、stderr 0 字节）：
 
@@ -21,7 +21,9 @@
 | 1.21.9 | 59.0.5 | `1.21.9 HD_U_J7_pre2` | **N/A** | 是 | 是 |
 | 1.21.10 | 60.1.18 | `1.21.10 HD_U_J7_pre9` | 兼容 | 是 | 是 |
 | 1.21.11 | 61.2.4 | `1.21.11 HD_U_J9_pre4` | 兼容 | 是 | 是 |
+| 1.20.6 | 50.2.14 | `1.20.6 HD_U_J1_pre18` | 兼容 | 是 | 是 |
 | 1.20.1 | 47.4.23 | `1.20.1 HD_U_I6` | 兼容 | 是 | 未复现 |
+| 26.1.2 | 64.1.5 | `26.1.2 HD_U_K1_pre2` | **N/A** | 是 | 进世界后撞 Forge loot 断言（见 STATE） |
 
 两条 N/A 线都是：`Setting user`、`Sound engine started`、250 条上下 `[OptiFine]` 日志、0 崩溃报告、
 stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本线尚未实测，见 [docs/STATE.md](docs/STATE.md)。

@@ -270,6 +270,26 @@ bypassed ImmediateWindowHandler.setupMinecraftWindow (arity changed on 26.x) x1`
 
 rig 经验（有用）：26.x 用 NeoForge 的世界会卡在 `world_gen_settings.dat` 读不到；**用 Forge 自己的
 server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条也解释了之前 26.1.2 一直"进不了世界"）。
+### 0.6.0：八条线干净通过，1.20.6 一次通过（2026-10-20）
+
+新增 **1.20.6 + Forge 50.2.14 + OptiFine `1.20.6 J1_pre18`**：`joined the game`、141 条 `[OptiFine]`、
+0 崩溃、`v3` pack——**不需要任何新修复**。
+
+当前干净通过的组合（都是 `Dev joined the game` + 0 崩溃 + stderr 0 字节）：
+
+| MC | Forge | OptiFine | 官方 Forge 列 |
+|---|---|---|---|
+| 1.20.6 | 50.2.14 | `J1_pre18` | 兼容 |
+| 1.21 | 51.0.33 | `J1_pre9` | N/A |
+| 1.21.6 | 56.0.9 | `J6_pre3` | N/A |
+| 1.21.7 | 57.0.3 | `J6_pre7` | N/A |
+| 1.21.8 | 58.1.26 | `J6_pre13` | 兼容 |
+| 1.21.9 | 59.0.5 | `J7_pre2` | N/A |
+| 1.21.10 | 60.1.18 | `J7_pre9` | 兼容 |
+| 1.21.11 | 61.2.4 | `J9_pre4` | 兼容 |
+
+边界状态：`26.1.2`（N/A）能启动 + 进世界，但进世界后撞 Forge 的 `LootModifierManager` 断言
+（纯 Forge 对照不崩）；`1.20.1` 只验证了启动。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -447,6 +467,26 @@ bypassed ImmediateWindowHandler.setupMinecraftWindow (arity changed on 26.x) x1`
 
 rig 经验（有用）：26.x 用 NeoForge 的世界会卡在 `world_gen_settings.dat` 读不到；**用 Forge 自己的
 server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条也解释了之前 26.1.2 一直"进不了世界"）。
+### 0.6.0：八条线干净通过，1.20.6 一次通过（2026-10-20）
+
+新增 **1.20.6 + Forge 50.2.14 + OptiFine `1.20.6 J1_pre18`**：`joined the game`、141 条 `[OptiFine]`、
+0 崩溃、`v3` pack——**不需要任何新修复**。
+
+当前干净通过的组合（都是 `Dev joined the game` + 0 崩溃 + stderr 0 字节）：
+
+| MC | Forge | OptiFine | 官方 Forge 列 |
+|---|---|---|---|
+| 1.20.6 | 50.2.14 | `J1_pre18` | 兼容 |
+| 1.21 | 51.0.33 | `J1_pre9` | N/A |
+| 1.21.6 | 56.0.9 | `J6_pre3` | N/A |
+| 1.21.7 | 57.0.3 | `J6_pre7` | N/A |
+| 1.21.8 | 58.1.26 | `J6_pre13` | 兼容 |
+| 1.21.9 | 59.0.5 | `J7_pre2` | N/A |
+| 1.21.10 | 60.1.18 | `J7_pre9` | 兼容 |
+| 1.21.11 | 61.2.4 | `J9_pre4` | 兼容 |
+
+边界状态：`26.1.2`（N/A）能启动 + 进世界，但进世界后撞 Forge 的 `LootModifierManager` 断言
+（纯 Forge 对照不崩）；`1.20.1` 只验证了启动。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
