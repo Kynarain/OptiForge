@@ -1,0 +1,15 @@
+// One source tree, three Minecraft lines.
+//
+// OptiForge never compiles against Minecraft or Forge: Forge's ModLauncher is the only API it
+// touches, and that API is the same on 1.20.x, 1.21.x and 26.x. So there is no ForgeGradle here, no
+// mappings, and no per-line source set - see docs/DESIGN.md for why that is a design decision rather
+// than a shortcut. The Minecraft and Forge numbers below are documentation for which runtime each
+// line is validated against; they do not affect the compilation.
+pluginManagement {
+    repositories {
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+rootProject.name = 'OptiForge'

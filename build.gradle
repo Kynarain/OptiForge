@@ -1,0 +1,69 @@
+// OptiForge - loads OptiFine builds on Forge.
+//
+// Plain `java` plugin on purpose: the mod jar only implements Forge's ModLauncher transformation
+// service, so it needs ModLauncher + ASM at compile time and nothing from Minecraft or Forge. That
+// makes one jar usable on every line (1.20.x / 1.21.x / 26.x) instead of one Gradle project per
+// Minecraft version - see docs/DESIGN.md.
+//
+// Two builds exist and produce the same artifact:
+//   gradlew build                 - this file
+//   pwsh -File tools/build.ps1    - ten lines of javac/jar, no distribution download
+// The repository's own checks have only the second one verified so far; see docs/STATE.md.
+
+version = "${project.mod_version_base}"
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(project.java_release as Integer)
+    }
+    withSourcesJar()
+}
+
+repositories {
+    maven {
+        name = 'forge'
+        url = 'https://maven.minecraftforge.net/releases'
+    }
+    mavenCentral()
+}
+
+dependencies {
+    // Provided by Forge at runtime; never bundled.
+    compileOnly "cpw.mods:modlauncher:${project.modlauncher_version}"
+    compileOnly "org.ow2.asm:asm:${project.asm_version}"
+    compileOnly "org.ow2.asm:asm-tree:${project.asm_version}"
+    compileOnly "org.ow2.asm:asm-commons:${project.asm_version}"
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    // One jar for every line: class file 61 loads on 17 (1.20.x), 21 (1.21.x) and 25 (26.x).
+    options.release = project.java_release as Integer
+}
+
+// The OptiFine/Forge table ships inside the jar, and data/ is its source of truth. Keeping the copy
+// in resources/ generated means the two can never disagree in a release build.
+tasks.register('syncMatrix', Copy) {
+    from 'data/optifine-forge-matrix.csv'
+    into 'src/main/resources/optiforge'
+}
+
+tasks.named('processResources') {
+    dependsOn 'syncMatrix'
+    inputs.property 'version', project.version
+    filesMatching('optiforge/optifine-forge-matrix.csv') {
+        // no token expansion needed; listed so the task tracks the file
+    }
+}
+
+tasks.named('build') {
+    doFirst {
+        println "Building ${project.archives_base_name} ${project.version} " +
+                "(Java ${project.java_release}, ModLauncher ${project.modlauncher_version})"
+    }
+}

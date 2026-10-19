@@ -1,0 +1,17 @@
+# Gradle / build outputs (tools/fetch-deps.ps1 + tools/build.ps1 regenerate everything here)
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# Instance leftovers, if a rig is ever pointed at this checkout
+run/
+logs/
+*.log
+
+# Windows
+Thumbs.db
+desktop.ini
