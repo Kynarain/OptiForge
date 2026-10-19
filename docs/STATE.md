@@ -290,6 +290,21 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 
 边界状态：`26.1.2`（N/A）能启动 + 进世界，但进世界后撞 Forge 的 `LootModifierManager` 断言
 （纯 Forge 对照不崩）；`1.20.1` 只验证了启动。
+### 26.1.2 的 loot 断言：查到的结论（下一轮从这里继续）
+
+- `ForgeEventFactory.onResourceReload(...)` 负责 post `AddReloadListenerEvent`，
+  而调用它的 `ReloadableServerResources`（在 Forge 的 client jar 里，二进制补丁过）**不在我们的补丁集**
+  ——所以钩子没丢，事件应该照常发。
+- 因此这是**时序**问题：quickPlay 进世界时，集成服务器的资源重载还没跑完（OptiFine 的
+  ResourcePack/资源加载把它推后了），服务器线程先算掉落物 → `LootModifierManager` 还是 null → 断言。
+- 纯 Forge 对照同世界不崩，说明差异确实来自 OptiFine 的资源处理路径。
+
+下一轮候选：
+1. 让 OptiFine 的资源重载与 `AddReloadListenerEvent` 的先后关系回到原版（看 OptiFine 26.x 对
+   `ReloadableResourceManager.createReload`/`CloseableResourceManager` 的补丁）；
+2. 或在 `ForgeInternalHandler.getLootModifierManager` 上做兜底（Forge 的类，我们可以 transform：
+   `INSTANCE` 为空时返回一个空的 manager——需要先确认 `LootModifierManager` 能不能无参构造）；
+3. 或延迟"进世界"（不可控，跳过）。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -487,6 +502,21 @@ server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条�
 
 边界状态：`26.1.2`（N/A）能启动 + 进世界，但进世界后撞 Forge 的 `LootModifierManager` 断言
 （纯 Forge 对照不崩）；`1.20.1` 只验证了启动。
+### 26.1.2 的 loot 断言：查到的结论（下一轮从这里继续）
+
+- `ForgeEventFactory.onResourceReload(...)` 负责 post `AddReloadListenerEvent`，
+  而调用它的 `ReloadableServerResources`（在 Forge 的 client jar 里，二进制补丁过）**不在我们的补丁集**
+  ——所以钩子没丢，事件应该照常发。
+- 因此这是**时序**问题：quickPlay 进世界时，集成服务器的资源重载还没跑完（OptiFine 的
+  ResourcePack/资源加载把它推后了），服务器线程先算掉落物 → `LootModifierManager` 还是 null → 断言。
+- 纯 Forge 对照同世界不崩，说明差异确实来自 OptiFine 的资源处理路径。
+
+下一轮候选：
+1. 让 OptiFine 的资源重载与 `AddReloadListenerEvent` 的先后关系回到原版（看 OptiFine 26.x 对
+   `ReloadableResourceManager.createReload`/`CloseableResourceManager` 的补丁）；
+2. 或在 `ForgeInternalHandler.getLootModifierManager` 上做兜底（Forge 的类，我们可以 transform：
+   `INSTANCE` 为空时返回一个空的 manager——需要先确认 `LootModifierManager` 能不能无参构造）；
+3. 或延迟"进世界"（不可控，跳过）。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
