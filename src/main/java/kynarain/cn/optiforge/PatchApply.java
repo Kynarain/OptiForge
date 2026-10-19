@@ -28,6 +28,7 @@ public final class PatchApply {
         Path optifine = null;
         Path base = null;
         Path out = null;
+        Path map = null;
         String one = null;
         boolean all = false;
         boolean namespace = false;
@@ -39,12 +40,14 @@ public final class PatchApply {
                 case "--base" -> base = Paths.get(args[++i]);
                 case "--class" -> one = args[++i];
                 case "--out" -> out = Paths.get(args[++i]);
+                case "--map" -> map = Paths.get(args[++i]);
                 case "--all" -> all = true;
                 case "--namespace" -> namespace = true;
                 case "--sample" -> sample = Integer.parseInt(args[++i]);
                 case "--help", "-h" -> {
                     System.out.println("usage: PatchApply --optifine <jar> --base <jar> "
-                            + "(--class <logical> [--out <file>] | --all | --namespace [--sample n])");
+                            + "(--class <logical> [--out <file>] [--map <srg-to-official.tsv>] "
+                            + "| --all | --namespace [--sample n])");
                     return;
                 }
                 default -> throw new IllegalArgumentException("unknown argument: " + args[i]);
@@ -105,11 +108,20 @@ public final class PatchApply {
             }
 
             byte[] patched = patcher.apply(one, base);
+            // The MD5 OptiFine records is the hash of the patched class BEFORE any remap, so it is
+            // computed here - otherwise a correct remap would report as "mismatch" forever.
             String expected = patcher.expectedMd5(one);
             String actual = md5(patched);
             System.out.println("class    : " + one);
             System.out.println("md5      : expected " + expected + " / actual " + actual
                     + (expected.equals(actual) ? "  (MATCH)" : "  (MISMATCH)"));
+            if (map != null) {
+                SrgRemap remap = SrgRemap.load(map);
+                SrgRemap.Result result = remap.remap(patched);
+                System.out.println("remap    : table " + remap.size() + " rows, renamed " + result.renamed
+                        + ", unmapped srg tokens " + result.unmapped);
+                patched = result.bytes;
+            }
             System.out.println("size     : " + patched.length + " bytes");
             if (out != null) {
                 Files.createDirectories(out.toAbsolutePath().getParent());
