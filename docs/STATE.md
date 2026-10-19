@@ -247,6 +247,29 @@ bypassed ImmediateWindowHandler.setupMinecraftWindow (arity changed on 26.x) x1`
 
 **进世界仍未达成**：世界开始加载（`world_gen_settings.dat` 读不到只是 NeoForge 的文件差异），但 200 秒内
 没出现 `joined the game`，像是卡在加载/生成阶段。
+### 26.1.2 已经能进世界，但进世界后立刻撞 Forge 的 loot 断言（本轮）
+
+用一个**由 Forge 26.1.2 专用服务器生成的世界**（`--installServer` + 首次启动生成）后：
+
+    [OptiFine] Forge version: 64.1.5
+    [OptiFine] Disable Forge light pipeline
+    Dev joined the game            <-- 进世界成功
+    [OptiFine] lines : 203
+
+进世界后 ~0.2 秒，**集成服务器**崩：
+
+    IllegalStateException: Can not retrieve LootModifierManager until resources have loaded once.
+      at ForgeInternalHandler.getLootModifierManager
+      at ForgeHooks.modifyLoot
+      at LootTable.getRandomItems
+      at BlockBehaviour.getDrops
+
+**对照**：同一个世界、纯 Forge 26.1.2（无 OptiFine）→ `joined: True`、**0 崩溃**。所以这是 OptiFine
+影响资源重载时序导致 Forge 的 `LootModifierManager` 还没初始化就去掉落物。下一步查 OptiFine 26.x 对
+资源重载/`ReloadableResourceManager` 的补丁是否吞掉了 Forge 的 reload listener 事件。
+
+rig 经验（有用）：26.x 用 NeoForge 的世界会卡在 `world_gen_settings.dat` 读不到；**用 Forge 自己的
+server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条也解释了之前 26.1.2 一直"进不了世界"）。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -401,6 +424,29 @@ bypassed ImmediateWindowHandler.setupMinecraftWindow (arity changed on 26.x) x1`
 
 **进世界仍未达成**：世界开始加载（`world_gen_settings.dat` 读不到只是 NeoForge 的文件差异），但 200 秒内
 没出现 `joined the game`，像是卡在加载/生成阶段。
+### 26.1.2 已经能进世界，但进世界后立刻撞 Forge 的 loot 断言（本轮）
+
+用一个**由 Forge 26.1.2 专用服务器生成的世界**（`--installServer` + 首次启动生成）后：
+
+    [OptiFine] Forge version: 64.1.5
+    [OptiFine] Disable Forge light pipeline
+    Dev joined the game            <-- 进世界成功
+    [OptiFine] lines : 203
+
+进世界后 ~0.2 秒，**集成服务器**崩：
+
+    IllegalStateException: Can not retrieve LootModifierManager until resources have loaded once.
+      at ForgeInternalHandler.getLootModifierManager
+      at ForgeHooks.modifyLoot
+      at LootTable.getRandomItems
+      at BlockBehaviour.getDrops
+
+**对照**：同一个世界、纯 Forge 26.1.2（无 OptiFine）→ `joined: True`、**0 崩溃**。所以这是 OptiFine
+影响资源重载时序导致 Forge 的 `LootModifierManager` 还没初始化就去掉落物。下一步查 OptiFine 26.x 对
+资源重载/`ReloadableResourceManager` 的补丁是否吞掉了 Forge 的 reload listener 事件。
+
+rig 经验（有用）：26.x 用 NeoForge 的世界会卡在 `world_gen_settings.dat` 读不到；**用 Forge 自己的
+server 生成一个世界**再复制到客户端的 `saves/` 就正常（这条也解释了之前 26.1.2 一直"进不了世界"）。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
