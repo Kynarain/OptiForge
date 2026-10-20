@@ -1,3 +1,5 @@
+<img src="docs/icon.png" width="96" align="right" alt="OptiForge">
+
 # OptiForge
 
 > OptiFine on Forge, with Forge Mod Loader loaded alongside.

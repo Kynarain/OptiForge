@@ -590,6 +590,13 @@ public final class OptifinePack {
     /** Classes visible on this launch; used to decide which foreign class literals are safe to keep. */
     private static volatile java.util.Set<String> visibleClasses = java.util.Set.of();
 
+    /** Bytes of the mod icon shipped in OptiForge's own jar, written at the staged jar's root. */
+    static byte[] iconBytes() throws IOException {
+        try (var in = OptifinePack.class.getResourceAsStream("/optiforge/optiforge_icon.png")) {
+            if (in == null) throw new IOException("optiforge_icon.png is missing from the OptiForge jar");
+            return in.readAllBytes();
+        }
+    }
     /** OptiFabric-style naming: a readable, versioned jar next to the OptiForge service jar. */
     static String stagedJarName() {
         return "OptiForge-" + Diagnose.VERSION + "-classes.jar";
@@ -625,6 +632,7 @@ public final class OptifinePack {
                 + "version=\"" + Diagnose.VERSION + "\"\n"
                 + "displayName=\"OptiForge\"\n"
                 + "description=\"OptiFine on Forge, with Forge Mod Loader loaded alongside.\"\n"
+                + "logoFile=\"optiforge_icon.png\"\n"
                 + "\n"
                 + "[[dependencies.optiforge]]\n"
                 + "modId=\"forge\"\n"
@@ -638,6 +646,7 @@ public final class OptifinePack {
                     ("Manifest-Version: 1.0\r\nImplementation-Title: OptiForge\r\n\r\n")
                             .getBytes(StandardCharsets.UTF_8));
             put(out, "META-INF/mods.toml", toml.getBytes(StandardCharsets.UTF_8));
+            put(out, "optiforge_icon.png", iconBytes());
             put(out, "pack.mcmeta", ("{\"pack\":{\"pack_format\":" + packFormat(mcVersion)
                     + ",\"description\":\"OptiForge\"}}\n").getBytes(StandardCharsets.UTF_8));
             put(out, "optiforge/generated/GeneratedMod.class", generatedModClass());
@@ -688,6 +697,7 @@ public final class OptifinePack {
                 + "version=\"" + Diagnose.VERSION + "\"\n"
                 + "displayName=\"OptiForge\"\n"
                 + "description=\"OptiFine on Forge, with Forge Mod Loader loaded alongside.\"\n"
+                + "logoFile=\"optiforge_icon.png\"\n"
                 + "\n"
                 + "[[dependencies.optiforge]]\n"
                 + "modId=\"forge\"\n"
@@ -704,6 +714,7 @@ public final class OptifinePack {
                             + "Implementation-Title: OptiForge\r\n"
                             + "\r\n").getBytes(StandardCharsets.UTF_8));
             put(out, "META-INF/mods.toml", toml.getBytes(StandardCharsets.UTF_8));
+            put(out, "optiforge_icon.png", iconBytes());
             // Without pack.mcmeta Forge refuses to expose this jar's assets as a resource pack ("failed to
             // load a valid ResourcePackInfo"), and OptiFine's own text is then shown as raw keys
             // (of.options.AO_LEVEL and friends) because its .lang files live in those assets.

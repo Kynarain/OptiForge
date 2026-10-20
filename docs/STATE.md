@@ -558,6 +558,17 @@ OptiFabric 的做法（`MixinTitleScreen`）：缺 OptiFine 时在标题界面�
 
 实测（1.20.1 + Forge 47.4.20）：缺 OptiFine → 标题界面弹出提示框、0 崩溃、mods 里只有
 `OptiForge-0.11.0-classes.jar`；放回 OptiFine → 提示不再出现、132 条 `[OptiFine]`、0 崩溃。
+### 0.11.1：图标（灰黑色 OF）
+
+用户桌面的 `icon.png`（128×128，蓝底白字 OF）改色后用做图标：把蓝色字改成灰黑 (#2B2B2B)，
+放在浅灰圆角底板上（#ECECEC，radius 20），缩放时保持字母原始宽高比并居中——这样在 mods 列表的深色
+背景上也有对比度。
+
+落地点：
+- `src/main/resources/optiforge/optiforge_icon.png`（OptiForge jar 内）+ `docs/icon.png`（README，512）；
+- 生成的 jar 根目录写 `optiforge_icon.png`，`mods.toml` 加 `logoFile="optiforge_icon.png"`
+  （正常路径与"只有提示"的路径都写）；
+- 实测（1.20.1）：Mods 界面显示灰黑 OF 图标，名称 OptiForge、版本 0.11.1、ModId optiforge、License MPL 2.0。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -1023,6 +1034,17 @@ OptiFabric 的做法（`MixinTitleScreen`）：缺 OptiFine 时在标题界面�
 
 实测（1.20.1 + Forge 47.4.20）：缺 OptiFine → 标题界面弹出提示框、0 崩溃、mods 里只有
 `OptiForge-0.11.0-classes.jar`；放回 OptiFine → 提示不再出现、132 条 `[OptiFine]`、0 崩溃。
+### 0.11.1：图标（灰黑色 OF）
+
+用户桌面的 `icon.png`（128×128，蓝底白字 OF）改色后用做图标：把蓝色字改成灰黑 (#2B2B2B)，
+放在浅灰圆角底板上（#ECECEC，radius 20），缩放时保持字母原始宽高比并居中——这样在 mods 列表的深色
+背景上也有对比度。
+
+落地点：
+- `src/main/resources/optiforge/optiforge_icon.png`（OptiForge jar 内）+ `docs/icon.png`（README，512）；
+- 生成的 jar 根目录写 `optiforge_icon.png`，`mods.toml` 加 `logoFile="optiforge_icon.png"`
+  （正常路径与"只有提示"的路径都写）；
+- 实测（1.20.1）：Mods 界面显示灰黑 OF 图标，名称 OptiForge、版本 0.11.1、ModId optiforge、License MPL 2.0。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
