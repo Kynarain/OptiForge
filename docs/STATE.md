@@ -464,6 +464,21 @@ Forge 配置）。进世界在本测试环境里试过三种方式，**都没有
    attempted from a different class (ForgeGui) than the field's declaring class`
   （`ForgeGui.<init>` 来自 `Minecraft.<init>`）。这个类**不在我们的补丁集**里，怀疑是修复 rig 库时引入了
   重复的 ForgeGui 定义（同名类被两个 loader 定义），下一轮先核对 rig 的库是否有重复 jar。
+### 1.20.2 的 ForgeGui 错误：定位到"只有 OptiFine 在场才出现"
+
+三组对照（都在同一个 rig、同一个 Forge 1.20.2-48.0.1）：
+
+| 组合 | 结果 |
+|---|---|
+| 纯 Forge 1.20.2（无 OptiForge、无 OptiFine） | 正常：`Setting user` + `Sound engine started`、0 崩溃 |
+| 有 OptiForge、**没有** OptiFine | 正常：`Setting user`、0 崩溃 |
+| 有 OptiForge + OptiFine `1.20.2 HD_U_I7_pre1` | `IllegalAccessError: Update to non-static final field ForgeGui.f_291320_ attempted from a different class (ForgeGui)` |
+| 同上，且 `-Doptiforge.skipClasses=net.minecraft.client.Minecraft` | 同一个错误 → 与"是否替换 Minecraft"无关 |
+
+已排除：`ForgeGui` **不在**我们的补丁集、我们的 staged mod jar 里**没有** `net/minecraftforge/**` 类、
+OptiFine jar 里也没有 `ForgeGui` 的补丁条目（只有 `notch/net/minecraftforge/client/extensions/IForgeGuiGraphics.class`
+这种它自带的 stub）。所以这是 **OptiFine 1.20.2 这个构建与 Forge 48 的相互作用**，不是加载器对它做了错误替换。
+该线只有这一个构建，若以后有新的 1.20.2 构建可以再试。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -835,6 +850,21 @@ Forge 配置）。进世界在本测试环境里试过三种方式，**都没有
    attempted from a different class (ForgeGui) than the field's declaring class`
   （`ForgeGui.<init>` 来自 `Minecraft.<init>`）。这个类**不在我们的补丁集**里，怀疑是修复 rig 库时引入了
   重复的 ForgeGui 定义（同名类被两个 loader 定义），下一轮先核对 rig 的库是否有重复 jar。
+### 1.20.2 的 ForgeGui 错误：定位到"只有 OptiFine 在场才出现"
+
+三组对照（都在同一个 rig、同一个 Forge 1.20.2-48.0.1）：
+
+| 组合 | 结果 |
+|---|---|
+| 纯 Forge 1.20.2（无 OptiForge、无 OptiFine） | 正常：`Setting user` + `Sound engine started`、0 崩溃 |
+| 有 OptiForge、**没有** OptiFine | 正常：`Setting user`、0 崩溃 |
+| 有 OptiForge + OptiFine `1.20.2 HD_U_I7_pre1` | `IllegalAccessError: Update to non-static final field ForgeGui.f_291320_ attempted from a different class (ForgeGui)` |
+| 同上，且 `-Doptiforge.skipClasses=net.minecraft.client.Minecraft` | 同一个错误 → 与"是否替换 Minecraft"无关 |
+
+已排除：`ForgeGui` **不在**我们的补丁集、我们的 staged mod jar 里**没有** `net/minecraftforge/**` 类、
+OptiFine jar 里也没有 `ForgeGui` 的补丁条目（只有 `notch/net/minecraftforge/client/extensions/IForgeGuiGraphics.class`
+这种它自带的 stub）。所以这是 **OptiFine 1.20.2 这个构建与 Forge 48 的相互作用**，不是加载器对它做了错误替换。
+该线只有这一个构建，若以后有新的 1.20.2 构建可以再试。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
