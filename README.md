@@ -37,6 +37,13 @@ stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本�
 **只有 OptiFine 在场时**出现，属于该 OptiFine 构建与 Forge 48 的相互作用，不是加载器的替换错误。
 `1.20.1` 启动通过，但本环境无法自动进世界（Forge 47 不响应 quickPlay/--server 等参数）。
 
+## 作者与链接
+
+- 作者：**Kynarain**（mods 列表里的 Authors，对应 mods.toml 的 authors 字段）
+- 仓库：<https://github.com/Kynarain/OptiForge>　问题反馈：<https://github.com/Kynarain/OptiForge/issues>
+- 协议：[MPL 2.0](LICENSE)
+- Credits：OptiFine 由 **sp614x** 开发；Fabric 侧同类方案是 **OptiFabric**（Chocohead），本项目的界面提示等做法参考了它
+
 ## 用法
 
 1. 把**你自己下载的** OptiFine jar 放到实例目录的 `optiforge/`（不是 `mods/` —— 放 `mods/` 会让

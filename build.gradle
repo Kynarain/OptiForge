@@ -77,3 +77,15 @@ tasks.named('build') {
                 "(Java ${project.java_release}, ModLauncher ${project.modlauncher_version})"
     }
 }
+
+// Same identity as the javac build: title, version and vendor (author) end up in the jar manifest.
+tasks.named('jar') {
+    manifest {
+        attributes(
+                'Implementation-Title': project.archives_base_name,
+                'Implementation-Version': project.version.toString(),
+                'Implementation-Vendor': project.findProperty('mod_authors') ?: 'Kynarain',
+                'Main-Class': 'kynarain.cn.optiforge.Diagnose'
+        )
+    }
+}

@@ -573,6 +573,22 @@ OptiFabric 的做法（`MixinTitleScreen`）：缺 OptiFine 时在标题界面�
 
 按反馈把底板的圆角去掉：浅灰 `#ECECEC` **正方形**底板（128×128，无圆角）+ 灰黑 `#2B2B2B` 的 "OF"，
 字母按原始宽高比缩放到 92×49 并居中。`docs/icon.png` 同步为 512×512（最近邻放大，保持硬边）。
+### 0.12.0：mods.toml 的作者、Credits、链接与依赖
+
+Mods 界面此前只显示名称/版本/ModId/协议，缺作者与链接。现在 `mods.toml` 由 `OptifinePack.modToml()` 统一生成
+（正常路径与"只有提示"路径共用一份），包含：
+
+    authors="Kynarain"
+    credits="OptiFine by sp614x. OptiFabric (Chocohead) for the Fabric-side approach."
+    displayURL="https://github.com/Kynarain/OptiForge"
+    issueTrackerURL="https://github.com/Kynarain/OptiForge/issues"
+    logoFile="optiforge_icon.png"
+    [[dependencies.optiforge]] forge [1,) / minecraft [1.20.1,)
+
+另外：`OptiForge-<版本>.jar` 自身的 MANIFEST 现在有 `Implementation-Title/Version/Vendor`
+（`build.ps1` 与 Gradle 两处都写，`mod_authors` 出现在 `gradle.properties`）；README 增加"作者与链接"一节。
+
+实测（1.20.1）：Mods 界面显示 Authors: Kynarain、Credits、可点击的 Homepage、License: MPL 2.0。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -1053,6 +1069,22 @@ OptiFabric 的做法（`MixinTitleScreen`）：缺 OptiFine 时在标题界面�
 
 按反馈把底板的圆角去掉：浅灰 `#ECECEC` **正方形**底板（128×128，无圆角）+ 灰黑 `#2B2B2B` 的 "OF"，
 字母按原始宽高比缩放到 92×49 并居中。`docs/icon.png` 同步为 512×512（最近邻放大，保持硬边）。
+### 0.12.0：mods.toml 的作者、Credits、链接与依赖
+
+Mods 界面此前只显示名称/版本/ModId/协议，缺作者与链接。现在 `mods.toml` 由 `OptifinePack.modToml()` 统一生成
+（正常路径与"只有提示"路径共用一份），包含：
+
+    authors="Kynarain"
+    credits="OptiFine by sp614x. OptiFabric (Chocohead) for the Fabric-side approach."
+    displayURL="https://github.com/Kynarain/OptiForge"
+    issueTrackerURL="https://github.com/Kynarain/OptiForge/issues"
+    logoFile="optiforge_icon.png"
+    [[dependencies.optiforge]] forge [1,) / minecraft [1.20.1,)
+
+另外：`OptiForge-<版本>.jar` 自身的 MANIFEST 现在有 `Implementation-Title/Version/Vendor`
+（`build.ps1` 与 Gradle 两处都写，`mod_authors` 出现在 `gradle.properties`）；README 增加"作者与链接"一节。
+
+实测（1.20.1）：Mods 界面显示 Authors: Kynarain、Credits、可点击的 Homepage、License: MPL 2.0。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

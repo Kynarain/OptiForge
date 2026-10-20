@@ -70,7 +70,11 @@ New-Item -ItemType Directory -Force -Path (Join-Path $classes 'optiforge') | Out
 [System.IO.File]::WriteAllText((Join-Path $classes 'optiforge\version.txt'), $Version, (New-Object System.Text.UTF8Encoding($false)))
 
 $out = Join-Path $libs "OptiForge-$Version.jar"
-& $jarTool --create --file $out --main-class kynarain.cn.optiforge.Diagnose -C $classes .
+# Manifest carries the same identity Forge's Mods screen shows: title, version, vendor (author).
+$manifest = Join-Path $root ('build\MANIFEST.MF')
+$manifestText = "Manifest-Version: 1.0`r`nMain-Class: kynarain.cn.optiforge.Diagnose`r`nImplementation-Title: OptiForge`r`nImplementation-Version: $Version`r`nImplementation-Vendor: Kynarain`r`n`r`n"
+[System.IO.File]::WriteAllText($manifest, $manifestText, (New-Object System.Text.ASCIIEncoding))
+& $jarTool --create --file $out --manifest $manifest -C $classes .
 if ($LASTEXITCODE -ne 0) { throw "jar failed with exit code $LASTEXITCODE" }
 
 Write-Host ("built {0} ({1} bytes)" -f $out, (Get-Item $out).Length)

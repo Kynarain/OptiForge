@@ -590,6 +590,41 @@ public final class OptifinePack {
     /** Classes visible on this launch; used to decide which foreign class literals are safe to keep. */
     private static volatile java.util.Set<String> visibleClasses = java.util.Set.of();
 
+    /**
+     * mods.toml for the staged jar: the metadata Forge shows in the Mods list (name, author, licence, links).
+     *
+     * <p>Forge's javafml rejects unknown keys, so this sticks to the fields that exist on every 1.20+ line.
+     */
+    static String modToml() {
+        return "modLoader=\"javafml\"\n"
+                + "loaderVersion=\"[1,)\"\n"
+                + "license=\"MPL 2.0\"\n"
+                + "\n"
+                + "[[mods]]\n"
+                + "modId=\"optiforge\"\n"
+                + "version=\"" + Diagnose.VERSION + "\"\n"
+                + "displayName=\"OptiForge\"\n"
+                + "authors=\"Kynarain\"\n"
+                + "credits=\"OptiFine by sp614x. OptiFabric (Chocohead) for the Fabric-side approach.\"\n"
+                + "description=\"OptiFine on Forge, with Forge Mod Loader loaded alongside.\"\n"
+                + "logoFile=\"optiforge_icon.png\"\n"
+                + "displayURL=\"https://github.com/Kynarain/OptiForge\"\n"
+                + "issueTrackerURL=\"https://github.com/Kynarain/OptiForge/issues\"\n"
+                + "\n"
+                + "[[dependencies.optiforge]]\n"
+                + "modId=\"forge\"\n"
+                + "mandatory=true\n"
+                + "versionRange=\"[1,)\"\n"
+                + "ordering=\"NONE\"\n"
+                + "side=\"BOTH\"\n"
+                + "\n"
+                + "[[dependencies.optiforge]]\n"
+                + "modId=\"minecraft\"\n"
+                + "mandatory=true\n"
+                + "versionRange=\"[1.20.1,)\"\n"
+                + "ordering=\"NONE\"\n"
+                + "side=\"BOTH\"\n";
+    }
     /** Bytes of the mod icon shipped in OptiForge's own jar, written at the staged jar's root. */
     static byte[] iconBytes() throws IOException {
         try (var in = OptifinePack.class.getResourceAsStream("/optiforge/optiforge_icon.png")) {
@@ -623,28 +658,15 @@ public final class OptifinePack {
         Files.createDirectories(mods);
         Path target = mods.resolve(stagedJarName());
         notes.append("staging notice mod ").append(target.getFileName()).append('\n');
-        String toml = "modLoader=\"javafml\"\n"
-                + "loaderVersion=\"[1,)\"\n"
-                + "license=\"MPL 2.0\"\n"
-                + "\n"
-                + "[[mods]]\n"
-                + "modId=\"optiforge\"\n"
-                + "version=\"" + Diagnose.VERSION + "\"\n"
-                + "displayName=\"OptiForge\"\n"
-                + "description=\"OptiFine on Forge, with Forge Mod Loader loaded alongside.\"\n"
-                + "logoFile=\"optiforge_icon.png\"\n"
-                + "\n"
-                + "[[dependencies.optiforge]]\n"
-                + "modId=\"forge\"\n"
-                + "mandatory=true\n"
-                + "versionRange=\"[1,)\"\n"
-                + "ordering=\"NONE\"\n"
-                + "side=\"BOTH\"\n";
+        String toml = modToml();
         Path tmp = mods.resolve(target.getFileName() + ".tmp");
         try (var out = new java.util.zip.ZipOutputStream(Files.newOutputStream(tmp))) {
             put(out, "META-INF/MANIFEST.MF",
-                    ("Manifest-Version: 1.0\r\nImplementation-Title: OptiForge\r\n\r\n")
-                            .getBytes(StandardCharsets.UTF_8));
+                    ("Manifest-Version: 1.0\r\n"
+                            + "Implementation-Title: OptiForge\r\n"
+                            + "Implementation-Version: " + Diagnose.VERSION + "\r\n"
+                            + "Implementation-Vendor: Kynarain\r\n"
+                            + "\r\n").getBytes(StandardCharsets.UTF_8));
             put(out, "META-INF/mods.toml", toml.getBytes(StandardCharsets.UTF_8));
             put(out, "optiforge_icon.png", iconBytes());
             put(out, "pack.mcmeta", ("{\"pack\":{\"pack_format\":" + packFormat(mcVersion)
@@ -688,23 +710,7 @@ public final class OptifinePack {
         // OptiFine jar or the remap table changes), and a fixed name keeps mods/ free of stale copies
         // for other OptiFine builds. Writing ~2 MB costs a few tens of milliseconds.
         notes.append("staging library mod ").append(target.getFileName()).append('\n');
-        String toml = "modLoader=\"javafml\"\n"
-                + "loaderVersion=\"[1,)\"\n"
-                + "license=\"MPL 2.0\"\n"
-                + "\n"
-                + "[[mods]]\n"
-                + "modId=\"optiforge\"\n"
-                + "version=\"" + Diagnose.VERSION + "\"\n"
-                + "displayName=\"OptiForge\"\n"
-                + "description=\"OptiFine on Forge, with Forge Mod Loader loaded alongside.\"\n"
-                + "logoFile=\"optiforge_icon.png\"\n"
-                + "\n"
-                + "[[dependencies.optiforge]]\n"
-                + "modId=\"forge\"\n"
-                + "mandatory=true\n"
-                + "versionRange=\"[1,)\"\n"
-                + "ordering=\"NONE\"\n"
-                + "side=\"BOTH\"\n";
+        String toml = modToml();
 
         boolean stageClasses = !"false".equalsIgnoreCase(System.getProperty("optiforge.stageClasses", "true"));
         Path tmp = mods.resolve(target.getFileName() + ".tmp");
@@ -712,6 +718,8 @@ public final class OptifinePack {
             put(out, "META-INF/MANIFEST.MF",
                     ("Manifest-Version: 1.0\r\n"
                             + "Implementation-Title: OptiForge\r\n"
+                            + "Implementation-Version: " + Diagnose.VERSION + "\r\n"
+                            + "Implementation-Vendor: Kynarain\r\n"
                             + "\r\n").getBytes(StandardCharsets.UTF_8));
             put(out, "META-INF/mods.toml", toml.getBytes(StandardCharsets.UTF_8));
             put(out, "optiforge_icon.png", iconBytes());
