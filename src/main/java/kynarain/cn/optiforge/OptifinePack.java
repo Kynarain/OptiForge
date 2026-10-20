@@ -270,6 +270,28 @@ public final class OptifinePack {
                                    StringBuilder notes) {
         List<Path> candidates = new ArrayList<>();
         if (override != null && !override.isBlank()) candidates.add(Path.of(override));
+        // Forge's own client jar is the jar that actually holds the patched game classes; PCL-style launchers
+        // also ship a versions/<id>/<id>.jar that can be the *unpatched* merge. Measured: with the unpatched
+        // jar as the base, OptiFine's Mob patch came out calling IForgeLivingEntity.super without that
+        // interface and the launch died with "VerifyError: Bad invokespecial ... indirect superinterface".
+        if (!info.mcVersion.isEmpty() && !info.forgeVersion.isEmpty()) {
+            String tag = info.mcVersion + "-" + info.forgeVersion;
+            List<Path> roots = new ArrayList<>();
+            if (gameDir != null) {
+                java.nio.file.Path cursor = gameDir.toAbsolutePath();
+                for (int depth = 0; depth < 4 && cursor != null; depth++) {
+                    roots.add(cursor.resolve("libraries"));
+                    cursor = cursor.getParent();
+                }
+            }
+            String home = System.getProperty("user.home", "");
+            if (!home.isBlank()) roots.add(Path.of(home).resolve(".minecraft").resolve("libraries"));
+            for (Path root : roots) {
+                Path client = root.resolve("net").resolve("minecraftforge").resolve("forge").resolve(tag)
+                        .resolve("forge-" + tag + "-client.jar");
+                if (Files.isRegularFile(client)) candidates.add(client);
+            }
+        }
         if (gameDir != null && !info.mcVersion.isEmpty()) {
             candidates.add(gameDir.resolve("versions").resolve(info.mcVersion).resolve(info.mcVersion + ".jar"));
         }
@@ -312,7 +334,7 @@ public final class OptifinePack {
     /** @return true when the jar looks like Forge's patched client jar (the one the game loads). */
     private static boolean isForgeClientJar(Path jar) {
         String name = jar.getFileName().toString().toLowerCase(Locale.ROOT);
-        if (name.contains("-forge-")) return true;
+        if (name.startsWith("forge-") || name.contains("-forge-")) return true;
         try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {
             return zip.getEntry("net/minecraftforge/client/extensions/IForgeBlockModel") != null
                     || zip.getEntry("net/minecraftforge/common/ForgeMod.class") != null;
@@ -458,6 +480,20 @@ public final class OptifinePack {
             strippedInterfaces++;
             System.out.println("[OptiForge] dropped absent interface(s) " + dropped + " from " + entry.getKey());
         }
+        // OptiFine's payload can call an interface default method through invokespecial without declaring that
+        // interface, which the JVM rejects unless it is a direct superinterface (see SuperInterfaceFixer).
+        int superInterfacesAdded = 0;
+        for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
+            org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
+            new org.objectweb.asm.ClassReader(entry.getValue()).accept(node, 0);
+            var added = SuperInterfaceFixer.fix(node, available);
+            if (added.isEmpty()) continue;
+            org.objectweb.asm.ClassWriter writer = new org.objectweb.asm.ClassWriter(0);
+            node.accept(writer);
+            patched.put(entry.getKey(), writer.toByteArray());
+            superInterfacesAdded += added.size();
+        }
+        notes.append("interface super-calls declared: ").append(superInterfacesAdded).append('\n');
         notes.append(stripInterfaces
                         ? "classpath index: " + available.size() + " classes; absent Forge interfaces dropped: "
                                 + strippedInterfaces + " class(es)\n"
@@ -642,7 +678,7 @@ public final class OptifinePack {
      * older OptiForge kept being reused and new fixes silently never ran - measured on 26.1.2, whose pack
      * still dated from before OwnRefs existed.
      */
-    private static final String PACK_VERSION = "v3";
+    private static final String PACK_VERSION = "v4";
 
     private static String key(Path optifineJar, Path baseJar) {
         String a = hashFile(optifineJar, 16);

@@ -53,8 +53,14 @@ public final class LaunchPaths {
         List<Path> libraryRoots = new ArrayList<>();
         if (!override.isBlank()) libraryRoots.add(Path.of(override));
         if (gameDir != null) {
-            libraryRoots.add(gameDir.resolve("libraries"));
-            if (gameDir.getParent() != null) libraryRoots.add(gameDir.getParent().resolve("libraries"));
+            // Version-isolated launchers (PCL and friends) put the game directory at versions/<id>, so the
+            // libraries live two levels up - measured: only checking the parent left the index without any
+            // Forge class on such an instance, which silently disabled the fixes that need it.
+            Path cursor = gameDir.toAbsolutePath();
+            for (int depth = 0; depth < 4 && cursor != null; depth++) {
+                libraryRoots.add(cursor.resolve("libraries"));
+                cursor = cursor.getParent();
+            }
         }
         // The launcher's own layout, which is where libraries really live even when the game directory
         // was moved somewhere else (a rig, a modpack instance, ...).

@@ -479,6 +479,26 @@ Forge 配置）。进世界在本测试环境里试过三种方式，**都没有
 OptiFine jar 里也没有 `ForgeGui` 的补丁条目（只有 `notch/net/minecraftforge/client/extensions/IForgeGuiGraphics.class`
 这种它自带的 stub）。所以这是 **OptiFine 1.20.2 这个构建与 Forge 48 的相互作用**，不是加载器对它做了错误替换。
 该线只有这一个构建，若以后有新的 1.20.2 构建可以再试。
+### 0.9.1：修两个只在"版本隔离启动器"上暴露的问题
+
+用户用 PCL 的 `versions/1.20.1-Forge_47.4.20/` 实例测试时出现
+`VerifyError: Bad invokespecial instruction: interface method reference is in an indirect superinterface`
+（`Mob.lambda$jumpInFluid$4` → `IForgeLivingEntity.jumpInFluid`），而同一组合在测试环境正常。
+
+两个原因，都在"库目录定位"上：
+
+1. **`libraries` 在上两级**：PCL 的实例目录是 `.minecraft/versions/<id>`，库在 `.minecraft/libraries`。
+   `LaunchPaths` 原来只查 `gameDir/libraries` 和上一级，于是类名索引几乎为空。
+2. **空索引导致误删**：索引不全时 `ForgeInterfaces.strip` 把**真实存在**的 Forge 接口当成"运行时没有"
+   从补丁类上摘掉（那次摘了 10 个，`Mob` 的 `IForgeLivingEntity` 就在里面）→ `invokespecial` 的
+   直接父接口要求不满足 → VerifyError。
+
+修法：`LaunchPaths` / `findBaseJar` 都**向上最多找 4 层**的 `libraries`；另外新增 `SuperInterfaceFixer`
+（建包期发现 `invokespecial` 到接口方法却没有声明该接口时补上，作为兜底）；`PACK_VERSION` 提到 `v4`，
+让所有旧缓存重建。
+
+实测（用户同实例、Java 22、PCL profile）：`Setting user`、`Sound engine started`、112 条 `[OptiFine]`、
+0 崩溃；索引 38351 个类、误删 0 个。回归：1.21.7 仍 `joined the game`、0 崩溃。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -865,6 +885,26 @@ Forge 配置）。进世界在本测试环境里试过三种方式，**都没有
 OptiFine jar 里也没有 `ForgeGui` 的补丁条目（只有 `notch/net/minecraftforge/client/extensions/IForgeGuiGraphics.class`
 这种它自带的 stub）。所以这是 **OptiFine 1.20.2 这个构建与 Forge 48 的相互作用**，不是加载器对它做了错误替换。
 该线只有这一个构建，若以后有新的 1.20.2 构建可以再试。
+### 0.9.1：修两个只在"版本隔离启动器"上暴露的问题
+
+用户用 PCL 的 `versions/1.20.1-Forge_47.4.20/` 实例测试时出现
+`VerifyError: Bad invokespecial instruction: interface method reference is in an indirect superinterface`
+（`Mob.lambda$jumpInFluid$4` → `IForgeLivingEntity.jumpInFluid`），而同一组合在测试环境正常。
+
+两个原因，都在"库目录定位"上：
+
+1. **`libraries` 在上两级**：PCL 的实例目录是 `.minecraft/versions/<id>`，库在 `.minecraft/libraries`。
+   `LaunchPaths` 原来只查 `gameDir/libraries` 和上一级，于是类名索引几乎为空。
+2. **空索引导致误删**：索引不全时 `ForgeInterfaces.strip` 把**真实存在**的 Forge 接口当成"运行时没有"
+   从补丁类上摘掉（那次摘了 10 个，`Mob` 的 `IForgeLivingEntity` 就在里面）→ `invokespecial` 的
+   直接父接口要求不满足 → VerifyError。
+
+修法：`LaunchPaths` / `findBaseJar` 都**向上最多找 4 层**的 `libraries`；另外新增 `SuperInterfaceFixer`
+（建包期发现 `invokespecial` 到接口方法却没有声明该接口时补上，作为兜底）；`PACK_VERSION` 提到 `v4`，
+让所有旧缓存重建。
+
+实测（用户同实例、Java 22、PCL profile）：`Setting user`、`Sound engine started`、112 条 `[OptiFine]`、
+0 崩溃；索引 38351 个类、误删 0 个。回归：1.21.7 仍 `joined the game`、0 崩溃。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
