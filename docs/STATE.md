@@ -452,6 +452,18 @@ Forge 配置）。进世界在本测试环境里试过三种方式，**都没有
 唯一未复现进世界的是 `1.20.1 + Forge 47.4.23`：启动通过（112 条 `[OptiFine]`、0 崩溃），但 Forge 47
 客户端不响应 `--quickPlaySingleplayer` / `--server` / `--quickPlayMultiplayer` 三种自动进服方式，
 属于本测试环境限制（专用服务器 `Done (11.277s)` 正常）。
+### 1.20.2（矩阵里最后一条现代 N/A 线）：本轮现状
+
+- 该线只有 1 个构建：`preview_OptiFine_1.20.2_HD_U_I7_pre1.jar`，官方标 `Forge N/A`；Forge 侧装了 48.0.1，
+  世界用 Forge 1.20.2 专用服务器生成。
+- rig 最初缺少 Forge 生成的 vanilla 映射 jar（`client-1.20.2-…-srg.jar` 等）：**必须先把原版 1.20.2 的
+  jar/json 放进安装器 scratch 的 `versions/1.20.2/`，再跑 `--installClient`**，否则 `--installClient` 不会
+  产出它们（这就是 STATE 里那条"安装器不下载原版"的坑的延伸）。补齐后启动能走更远（22 条 `[OptiFine]`）。
+- 当前停在：
+  `IllegalAccessError: Update to non-static final field net.minecraftforge.client.gui.overlay.ForgeGui.f_291320_
+   attempted from a different class (ForgeGui) than the field's declaring class`
+  （`ForgeGui.<init>` 来自 `Minecraft.<init>`）。这个类**不在我们的补丁集**里，怀疑是修复 rig 库时引入了
+  重复的 ForgeGui 定义（同名类被两个 loader 定义），下一轮先核对 rig 的库是否有重复 jar。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -811,6 +823,18 @@ Forge 配置）。进世界在本测试环境里试过三种方式，**都没有
 唯一未复现进世界的是 `1.20.1 + Forge 47.4.23`：启动通过（112 条 `[OptiFine]`、0 崩溃），但 Forge 47
 客户端不响应 `--quickPlaySingleplayer` / `--server` / `--quickPlayMultiplayer` 三种自动进服方式，
 属于本测试环境限制（专用服务器 `Done (11.277s)` 正常）。
+### 1.20.2（矩阵里最后一条现代 N/A 线）：本轮现状
+
+- 该线只有 1 个构建：`preview_OptiFine_1.20.2_HD_U_I7_pre1.jar`，官方标 `Forge N/A`；Forge 侧装了 48.0.1，
+  世界用 Forge 1.20.2 专用服务器生成。
+- rig 最初缺少 Forge 生成的 vanilla 映射 jar（`client-1.20.2-…-srg.jar` 等）：**必须先把原版 1.20.2 的
+  jar/json 放进安装器 scratch 的 `versions/1.20.2/`，再跑 `--installClient`**，否则 `--installClient` 不会
+  产出它们（这就是 STATE 里那条"安装器不下载原版"的坑的延伸）。补齐后启动能走更远（22 条 `[OptiFine]`）。
+- 当前停在：
+  `IllegalAccessError: Update to non-static final field net.minecraftforge.client.gui.overlay.ForgeGui.f_291320_
+   attempted from a different class (ForgeGui) than the field's declaring class`
+  （`ForgeGui.<init>` 来自 `Minecraft.<init>`）。这个类**不在我们的补丁集**里，怀疑是修复 rig 库时引入了
+  重复的 ForgeGui 定义（同名类被两个 loader 定义），下一轮先核对 rig 的库是否有重复 jar。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
