@@ -30,6 +30,11 @@
 两条 N/A 线都是：`Setting user`、`Sound engine started`、250 条上下 `[OptiFine]` 日志、0 崩溃报告、
 stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本线尚未实测，见 [docs/STATE.md](docs/STATE.md)。
 
+已知边界：`1.20.2`（唯一构建 `HD_U_I7_pre1`，官方 N/A）在 Forge 48 上启动阶段报
+`IllegalAccessError: ... ForgeGui`——三组对照（纯 Forge / 只有 OptiForge / OptiForge+OptiFine）显示
+**只有 OptiFine 在场时**出现，属于该 OptiFine 构建与 Forge 48 的相互作用，不是加载器的替换错误。
+`1.20.1` 启动通过，但本环境无法自动进世界（Forge 47 不响应 quickPlay/--server 等参数）。
+
 ## 用法
 
 1. 把**你自己下载的** OptiFine jar 放到实例目录的 `optiforge/`（不是 `mods/` —— 放 `mods/` 会让
