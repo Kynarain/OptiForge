@@ -572,13 +572,20 @@ public final class OptifinePack {
         notes.append("staging library mod ").append(target.getFileName()).append('\n');
         String toml = "modLoader=\"javafml\"\n"
                 + "loaderVersion=\"[1,)\"\n"
-                + "license=\"All rights reserved\"\n"
+                + "license=\"MPL 2.0\"\n"
                 + "\n"
                 + "[[mods]]\n"
-                + "modId=\"optiforge_optifine_classes\"\n"
-                + "version=\"1.0.0\"\n"
-                + "displayName=\"OptiForge - OptiFine classes\"\n"
-                + "description=\"OptiFine's own classes, prepared by OptiForge from the user's OptiFine jar.\"\n";
+                + "modId=\"optiforge\"\n"
+                + "version=\"" + Diagnose.VERSION + "\"\n"
+                + "displayName=\"OptiForge\"\n"
+                + "description=\"OptiFine on Forge, with Forge Mod Loader loaded alongside.\"\n"
+                + "\n"
+                + "[[dependencies.optiforge]]\n"
+                + "modId=\"forge\"\n"
+                + "mandatory=true\n"
+                + "versionRange=\"[1,)\"\n"
+                + "ordering=\"NONE\"\n"
+                + "side=\"BOTH\"\n";
 
         boolean stageClasses = !"false".equalsIgnoreCase(System.getProperty("optiforge.stageClasses", "true"));
         Path tmp = mods.resolve(target.getFileName() + ".tmp");
@@ -647,7 +654,7 @@ public final class OptifinePack {
     }
 
     /**
-     * Bytes of a marker class annotated with Forge's {@code @Mod("optiforge_optifine_classes")}.
+     * Bytes of a marker class annotated with Forge's {@code @Mod("optiforge")}.
      *
      * <p>Generated at runtime so that OptiForge keeps its no-Forge-compile-dependency rule: the only
      * thing needed is the annotation descriptor, which ASM can emit without the annotation class on
@@ -669,7 +676,7 @@ public final class OptifinePack {
         constructor.visitMaxs(1, 1);
         constructor.visitEnd();
         var annotation = writer.visitAnnotation("Lnet/minecraftforge/fml/common/Mod;", true);
-        annotation.visit("value", "optiforge_optifine_classes");
+        annotation.visit("value", "optiforge");
         annotation.visitEnd();
         writer.visitEnd();
         return writer.toByteArray();
@@ -856,7 +863,7 @@ public final class OptifinePack {
         org.objectweb.asm.ClassWriter writer = new org.objectweb.asm.ClassWriter(0);
         writer.visit(org.objectweb.asm.Opcodes.V17, org.objectweb.asm.Opcodes.ACC_MODULE,
                 "module-info", null, null, null);
-        var visitor = writer.visitModule("optiforge_optifine_classes", org.objectweb.asm.Opcodes.ACC_OPEN, null);
+        var visitor = writer.visitModule("optiforge", org.objectweb.asm.Opcodes.ACC_OPEN, null);
         visitor.visitRequire("java.base", org.objectweb.asm.Opcodes.ACC_MANDATED, null);
         // Hard requires for the Forge modules that live in a parent layer of the mod layer. The names
         // are stable across Forge 56+ (the first line where eventbus became its own module); the list

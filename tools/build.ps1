@@ -59,6 +59,10 @@ if (Test-Path $mappings) {
     [System.IO.File]::WriteAllLines((Join-Path $target 'index.txt'), $index, (New-Object System.Text.UTF8Encoding($false)))
 }
 
+# The runtime reads its own version from this file (see Diagnose.readVersion).
+New-Item -ItemType Directory -Force -Path (Join-Path $classes 'optiforge') | Out-Null
+[System.IO.File]::WriteAllText((Join-Path $classes 'optiforge\version.txt'), $Version, (New-Object System.Text.UTF8Encoding($false)))
+
 $out = Join-Path $libs "OptiForge-$Version.jar"
 & $jarTool --create --file $out --main-class kynarain.cn.optiforge.Diagnose -C $classes .
 if ($LASTEXITCODE -ne 0) { throw "jar failed with exit code $LASTEXITCODE" }

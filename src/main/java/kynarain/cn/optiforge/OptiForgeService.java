@@ -84,6 +84,53 @@ public final class OptiForgeService implements ITransformationService {
         }
     }
 
+    /** Name of the hint dropped into an empty optiforge/ directory. */
+    private static final String HINT_FILE = "PUT-OPTIFINE-HERE.txt";
+
+    /**
+     * Creates {@code <game>/optiforge/} and leaves a short note in it.
+     *
+     * <p>Measured: with no OptiFine present the launch is just plain Forge, which is silent about why
+     * OptiForge does nothing. Creating the folder the jar belongs in, with the download link inside it,
+     * is the one place a user looks first.
+     */
+    private static void writeOptifineHint(Path gameDir, StringBuilder notes) {
+        Path dir = gameDir.resolve("optiforge");
+        Path hint = dir.resolve(HINT_FILE);
+        try {
+            java.nio.file.Files.createDirectories(dir);
+            String text = "OptiForge needs the OptiFine jar.\n"
+                    + "\n"
+                    + "1. Download OptiFine for your Minecraft version from https://optifine.net/downloads\n"
+                    + "2. Put the downloaded jar into this folder (the one this file is in):\n"
+                    + "   " + dir.toAbsolutePath() + "\n"
+                    + "3. Start the game again. This file is removed automatically once OptiFine is found.\n"
+                    + "\n"
+                    + "Do NOT put the OptiFine jar into mods/ - Forge would mount it as a transformation\n"
+                    + "service and both patch pipelines would rewrite the same classes.\n"
+                    + "\n"
+                    + "OptiForge 需要 OptiFine 的 jar。\n"
+                    + "1. 到 https://optifine.net/downloads 下载对应游戏版本的 OptiFine；\n"
+                    + "2. 把下载到的 jar 放进本文件所在的 optiforge 文件夹；\n"
+                    + "3. 重新启动游戏；找到 OptiFine 后本文件会自动删除。\n"
+                    + "注意：不要把 OptiFine 放进 mods/，那样 Forge 会把它当成变换服务，两套补丁会互相冲突。\n";
+            java.nio.file.Files.writeString(hint, text, java.nio.charset.StandardCharsets.UTF_8);
+            notes.append("wrote ").append(hint.getFileName()).append(" (OptiFine jar missing)\n");
+            System.out.println("[OptiForge] no OptiFine jar found - created " + dir.toAbsolutePath()
+                    + " with instructions, see " + HINT_FILE);
+        } catch (java.io.IOException e) {
+            notes.append("could not write the OptiFine hint: ").append(e).append('\n');
+        }
+    }
+
+    /** Removes the hint again once an OptiFine jar has been found. */
+    private static void clearOptifineHint(Path gameDir) {
+        try {
+            java.nio.file.Files.deleteIfExists(gameDir.resolve("optiforge").resolve(HINT_FILE));
+        } catch (java.io.IOException ignored) {
+            // Best effort: a leftover note is harmless.
+        }
+    }
     /** Builds the pack once per process and writes the report. Idempotent. */
     static OptifinePack ensurePack() {
         if (prepared) return pack;
@@ -128,9 +175,23 @@ public final class OptiForgeService implements ITransformationService {
                         System.getProperty("optiforge.optifine"), NOTES);
                 if (optifineJar == null) {
                     NOTES.append("no OptiFine jar: put it in <game>/optiforge/ (or pass -Doptiforge.optifine=)\n");
+                    writeOptifineHint(gameDir, NOTES);
+                    // Without OptiFine the launch is plain Forge, so the classes jar derived from a previous
+                    // OptiFine must not stay behind: it is staged data that would otherwise be loaded as a
+                    // mod whose game-side half (the patched classes) is missing.
+                    Path stale = gameDir.resolve("mods").resolve("optiforge-optifine-classes.jar");
+                    try {
+                        if (java.nio.file.Files.deleteIfExists(stale)) {
+                            NOTES.append("removed stale ").append(stale.getFileName()).append('\n');
+                        }
+                    } catch (java.io.IOException e) {
+                        NOTES.append("could not remove ").append(stale.getFileName()).append(": ")
+                                .append(e).append('\n');
+                    }
                     finish();
                     return null;
                 }
+                clearOptifineHint(gameDir);
                 Path baseJar = OptifinePack.findBaseJar(info, gameDir, optifineJar,
                         System.getProperty("optiforge.vanilla"), NOTES);
                 if (baseJar == null) {

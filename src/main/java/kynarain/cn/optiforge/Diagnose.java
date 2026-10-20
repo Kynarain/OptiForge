@@ -26,7 +26,25 @@ import java.util.List;
  */
 public final class Diagnose {
 
-    public static final String VERSION = "0.1.0";
+    /**
+     * Build version, written into the jar as {@code /optiforge/version.txt} by both build paths.
+     *
+     * <p>It used to be a literal here and drifted: releases shipped 0.9.x while the report and the staged
+     * mods.toml still said 0.1.0.
+     */
+    public static final String VERSION = readVersion();
+
+    private static String readVersion() {
+        try (var in = Diagnose.class.getResourceAsStream("/optiforge/version.txt")) {
+            if (in != null) {
+                String text = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+                if (!text.isEmpty()) return text;
+            }
+        } catch (java.io.IOException ignored) {
+            // fall through to the placeholder
+        }
+        return "dev";
+    }
 
     private static final DateTimeFormatter STAMP = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 

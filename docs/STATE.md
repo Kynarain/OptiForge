@@ -526,6 +526,19 @@ OptiFine 的 `Lang.resourcesReloaded()` 读不到 `assets/minecraft/optifine/lan
 
 修法：stage 时写入 `pack.mcmeta`（`pack_format` 按 MC 版本给：1.20.1 → 15 等），`PACK_VERSION` → `v5`。
 验证：两条警告都不再出现，`pack v5-…` 正常构建，118 条 `[OptiFine]`、0 崩溃。
+### 0.10.0：mod 身份、协议、缺失 OptiFine 时的提示、版本号修正
+
+- **modId 改为 `optiforge`**（原来是 `optiforge_optifine_classes`），`displayName="OptiForge"`，
+  mods 列表里就是一个叫 OptiForge 的 mod；描述与 GitHub 仓库一致
+  （"OptiFine on Forge, with Forge Mod Loader loaded alongside."）。
+- **协议改为 MPL 2.0**（`mods.toml` 的 `license` 字段 + 仓库根目录 `LICENSE`）。
+- **没有 OptiFine 时**：创建 `<game>/optiforge/`，写入 `PUT-OPTIFINE-HERE.txt`（中英双语，含下载地址与
+  "不要放 mods/" 的说明），同时清掉上一轮遗留的 `mods/optiforge-optifine-classes.jar`；找到 OptiFine 后
+  自动删除该提示文件。实测：无 OptiFine → 目录+提示文件出现、游戏按原版 Forge 启动、0 崩溃；
+  放回 OptiFine → 提示文件消失、132 条 `[OptiFine]`、0 崩溃。
+- **版本号修正**：`Diagnose.VERSION` 原来是硬编码的 `0.1.0`（诊断报告和生成的 mods.toml 都跟着错）。
+  现在由构建写入 `optiforge/version.txt`（`build.ps1` 与 Gradle `writeVersion` 两处），运行时读取；
+  实测报告与 mods.toml 均为 `0.10.0`。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -959,6 +972,19 @@ OptiFine 的 `Lang.resourcesReloaded()` 读不到 `assets/minecraft/optifine/lan
 
 修法：stage 时写入 `pack.mcmeta`（`pack_format` 按 MC 版本给：1.20.1 → 15 等），`PACK_VERSION` → `v5`。
 验证：两条警告都不再出现，`pack v5-…` 正常构建，118 条 `[OptiFine]`、0 崩溃。
+### 0.10.0：mod 身份、协议、缺失 OptiFine 时的提示、版本号修正
+
+- **modId 改为 `optiforge`**（原来是 `optiforge_optifine_classes`），`displayName="OptiForge"`，
+  mods 列表里就是一个叫 OptiForge 的 mod；描述与 GitHub 仓库一致
+  （"OptiFine on Forge, with Forge Mod Loader loaded alongside."）。
+- **协议改为 MPL 2.0**（`mods.toml` 的 `license` 字段 + 仓库根目录 `LICENSE`）。
+- **没有 OptiFine 时**：创建 `<game>/optiforge/`，写入 `PUT-OPTIFINE-HERE.txt`（中英双语，含下载地址与
+  "不要放 mods/" 的说明），同时清掉上一轮遗留的 `mods/optiforge-optifine-classes.jar`；找到 OptiFine 后
+  自动删除该提示文件。实测：无 OptiFine → 目录+提示文件出现、游戏按原版 Forge 启动、0 崩溃；
+  放回 OptiFine → 提示文件消失、132 条 `[OptiFine]`、0 崩溃。
+- **版本号修正**：`Diagnose.VERSION` 原来是硬编码的 `0.1.0`（诊断报告和生成的 mods.toml 都跟着错）。
+  现在由构建写入 `optiforge/version.txt`（`build.ps1` 与 Gradle `writeVersion` 两处），运行时读取；
+  实测报告与 mods.toml 均为 `0.10.0`。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

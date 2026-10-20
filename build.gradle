@@ -53,8 +53,18 @@ tasks.register('syncMatrix', Copy) {
     into 'src/main/resources/optiforge'
 }
 
+// The runtime reads its version from this file; it must exist before processResources copies it.
+tasks.register('writeVersion') {
+    def out = file('src/main/resources/optiforge/version.txt')
+    outputs.file out
+    inputs.property 'version', project.version
+    doLast {
+        out.parentFile.mkdirs()
+        out.text = project.version.toString()
+    }
+}
 tasks.named('processResources') {
-    dependsOn 'syncMatrix'
+    dependsOn 'syncMatrix', 'writeVersion'
     inputs.property 'version', project.version
     filesMatching('optiforge/optifine-forge-matrix.csv') {
         // no token expansion needed; listed so the task tracks the file

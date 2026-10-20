@@ -2,13 +2,13 @@
 
 > OptiFine on Forge, with Forge Mod Loader loaded alongside.
 
-版本号遵循 SemVer（当前 `0.9.0`，见 `gradle.properties` 的 `mod_version_base`）。
+版本号遵循 SemVer（当前 `0.10.0`，见 `gradle.properties` 的 `mod_version_base`）。协议：[MPL 2.0](LICENSE)。
 
 在 **Forge** 上加载 **OptiFine** 的模组 —— 和 OptiFabric 在 Fabric 上做的事一样，只是目标换成 Forge。
 重点是那些 OptiFine 官方标成 **`Forge N/A`（not compatible with Forge）** 的构建：`1.21`、`1.21.6`、
 `1.21.7`、`1.21.9`、`26.1.2`、`26.2` 整条线都是 N/A。
 
-## 实测结果（0.9.0）
+## 实测结果（0.9.x 系列）
 
 七条 1.21.x 版本线、Forge 51→61，全部启动并进世界（`Dev joined the game`、0 崩溃报告、stderr 0 字节）：
 
@@ -46,7 +46,14 @@ stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本�
 可选覆盖：`-Doptiforge.optifine=<jar>`、`-Doptiforge.vanilla=<原版客户端 jar>`、
 `-Doptiforge.libraries=<libraries 目录>`。
 
-诊断报告写在 `<game>/optiforge/diagnose.txt`：版本、运行时命名空间、补丁/重映射/AT/兼容修复的计数。
+'诊断报告写在 `<game>/optiforge/diagnose.txt`：版本、运行时命名空间、补丁/重映射/AT/兼容修复的计数。
+
+**没放 OptiFine 时**：OptiForge 仍会创建 `<game>/optiforge/`，并在里面写一个
+`PUT-OPTIFINE-HERE.txt`（中英双语，含 <https://optifine.net/downloads> 与放置说明）；游戏按原版 Forge
+正常启动，不会崩。把 OptiFine jar 放进去后，该提示文件会自动删除。
+
+**mods 列表里的名字**：`OptiForge`（modId `optiforge`，版本与 Release 一致，协议 MPL 2.0）。
+这张脸由生成出来的 `mods/optiforge-optifine-classes.jar` 提供——OptiForge 本体是变换服务，不出现在 mod 列表里。'
 
 ## 它在做什么（详见 [docs/DESIGN.md](docs/DESIGN.md)）
 
