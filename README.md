@@ -48,12 +48,16 @@ stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本�
 
 '诊断报告写在 `<game>/optiforge/diagnose.txt`：版本、运行时命名空间、补丁/重映射/AT/兼容修复的计数。
 
-**没放 OptiFine 时**：OptiForge 仍会创建 `<game>/optiforge/`，并在里面写一个
-`PUT-OPTIFINE-HERE.txt`（中英双语，含 <https://optifine.net/downloads> 与放置说明）；游戏按原版 Forge
-正常启动，不会崩。把 OptiFine jar 放进去后，该提示文件会自动删除。
+**没放 OptiFine 时**：OptiForge 会创建 `<game>/optiforge/`，并**在游戏里**提示（做法参考 OptiFabric 的
+`MixinTitleScreen`）：标题界面弹出 `OptiForge 需要 OptiFine` 的确认框，正文给出 `optiforge` 文件夹的绝对路径、
+<https://optifine.net/downloads> 和"不要放 mods/"；点 "Yes" 直接打开该文件夹。游戏本身按原版 Forge 正常启动，
+不会崩。放好 OptiFine 后下次启动就不再提示。
 
-**mods 列表里的名字**：`OptiForge`（modId `optiforge`，版本与 Release 一致，协议 MPL 2.0）。
-这张脸由生成出来的 `mods/optiforge-optifine-classes.jar` 提供——OptiForge 本体是变换服务，不出现在 mod 列表里。'
+**文件名与 mods 列表**（参考 OptiFabric 的命名）：
+- `OptiForge-<版本>.jar` → 放进 `mods/`，这是 OptiForge 本体（变换服务，不出现在 mod 列表）；
+- `OptiForge-<版本>-classes.jar` → 自动生成在 `mods/`，是 mod 列表里那个 **OptiForge**（modId `optiforge`，
+  协议 MPL 2.0）；缺 OptiFine 时它只带提示、不带 OptiFine 类；
+- OptiFine 自身的 jar 保持官方文件名，放在 `optiforge/`。'
 
 ## 它在做什么（详见 [docs/DESIGN.md](docs/DESIGN.md)）
 

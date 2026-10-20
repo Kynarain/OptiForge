@@ -539,6 +539,25 @@ OptiFine 的 `Lang.resourcesReloaded()` 读不到 `assets/minecraft/optifine/lan
 - **版本号修正**：`Diagnose.VERSION` 原来是硬编码的 `0.1.0`（诊断报告和生成的 mods.toml 都跟着错）。
   现在由构建写入 `optiforge/version.txt`（`build.ps1` 与 Gradle `writeVersion` 两处），运行时读取；
   实测报告与 mods.toml 均为 `0.10.0`。
+### 0.11.0：缺 OptiFine 改成游戏内提示（照 OptiFabric 的做法），并给生成 jar 起可读名字
+
+OptiFabric 的做法（`MixinTitleScreen`）：缺 OptiFine 时在标题界面打开一个 ConfirmScreen（红色标题），
+带"打开 mods 文件夹 / 帮助"按钮。OptiForge 没有 Mixin，改成等价的实现：
+
+- 服务仍然创建 `<game>/optiforge/`，并**总是**在 `mods/` 里生成 `OptiForge-<版本>-classes.jar`
+  （缺 OptiFine 时里面只有提示类，没有 OptiFine 类），mod 列表里始终是一个 **OptiForge**；
+- 生成的 mod 构造函数启动一个守护线程，等标题界面出现后弹出 ConfirmScreen：
+  `OptiForge 需要 OptiFine`，正文含 `optiforge/` 绝对路径、下载地址、"不要放 mods/"，点 Yes 打开该文件夹；
+  拿不到 ConfirmScreen 时退化为系统 toast，再不行只写日志，绝不崩；
+- `Notice` 类随生成 jar 一起打包，并用 ASM `ClassRemapper` 重定位到 `optiforge/generated/Notice`
+  （只改名字会留下指向旧类的常量池引用，实测 `IllegalAccessError: ... private field`）；
+- 移除 `PUT-OPTIFINE-HERE.txt`（用户要求不要文件提示）；旧版本的 `optiforge-optifine-classes.jar`
+  启动时自动删除，避免两个模组抢同一个 modId；
+- `findOptifineJar` 照 OptiFabric 的挑选方式：优先文件名含 `OptiFine`，其次验证 jar 里确实有
+  `net/optifine/` 类，其它 jar 会被忽略并在诊断里记录。
+
+实测（1.20.1 + Forge 47.4.20）：缺 OptiFine → 标题界面弹出提示框、0 崩溃、mods 里只有
+`OptiForge-0.11.0-classes.jar`；放回 OptiFine → 提示不再出现、132 条 `[OptiFine]`、0 崩溃。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -985,6 +1004,25 @@ OptiFine 的 `Lang.resourcesReloaded()` 读不到 `assets/minecraft/optifine/lan
 - **版本号修正**：`Diagnose.VERSION` 原来是硬编码的 `0.1.0`（诊断报告和生成的 mods.toml 都跟着错）。
   现在由构建写入 `optiforge/version.txt`（`build.ps1` 与 Gradle `writeVersion` 两处），运行时读取；
   实测报告与 mods.toml 均为 `0.10.0`。
+### 0.11.0：缺 OptiFine 改成游戏内提示（照 OptiFabric 的做法），并给生成 jar 起可读名字
+
+OptiFabric 的做法（`MixinTitleScreen`）：缺 OptiFine 时在标题界面打开一个 ConfirmScreen（红色标题），
+带"打开 mods 文件夹 / 帮助"按钮。OptiForge 没有 Mixin，改成等价的实现：
+
+- 服务仍然创建 `<game>/optiforge/`，并**总是**在 `mods/` 里生成 `OptiForge-<版本>-classes.jar`
+  （缺 OptiFine 时里面只有提示类，没有 OptiFine 类），mod 列表里始终是一个 **OptiForge**；
+- 生成的 mod 构造函数启动一个守护线程，等标题界面出现后弹出 ConfirmScreen：
+  `OptiForge 需要 OptiFine`，正文含 `optiforge/` 绝对路径、下载地址、"不要放 mods/"，点 Yes 打开该文件夹；
+  拿不到 ConfirmScreen 时退化为系统 toast，再不行只写日志，绝不崩；
+- `Notice` 类随生成 jar 一起打包，并用 ASM `ClassRemapper` 重定位到 `optiforge/generated/Notice`
+  （只改名字会留下指向旧类的常量池引用，实测 `IllegalAccessError: ... private field`）；
+- 移除 `PUT-OPTIFINE-HERE.txt`（用户要求不要文件提示）；旧版本的 `optiforge-optifine-classes.jar`
+  启动时自动删除，避免两个模组抢同一个 modId；
+- `findOptifineJar` 照 OptiFabric 的挑选方式：优先文件名含 `OptiFine`，其次验证 jar 里确实有
+  `net/optifine/` 类，其它 jar 会被忽略并在诊断里记录。
+
+实测（1.20.1 + Forge 47.4.20）：缺 OptiFine → 标题界面弹出提示框、0 崩溃、mods 里只有
+`OptiForge-0.11.0-classes.jar`；放回 OptiFine → 提示不再出现、132 条 `[OptiFine]`、0 崩溃。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

@@ -25,7 +25,8 @@ $artifacts = @(
     @{ Name = 'modlauncher-10.0.9.jar';          Url = 'https://maven.minecraftforge.net/releases/cpw/mods/modlauncher/10.0.9/modlauncher-10.0.9.jar' },
     @{ Name = 'securejarhandler-2.1.10.jar';     Url = 'https://maven.minecraftforge.net/releases/cpw/mods/securejarhandler/2.1.10/securejarhandler-2.1.10.jar' },
     @{ Name = 'asm-9.9.1.jar';                   Url = 'https://repo1.maven.org/maven2/org/ow2/asm/asm/9.9.1/asm-9.9.1.jar' },
-    @{ Name = 'asm-tree-9.9.1.jar';              Url = 'https://repo1.maven.org/maven2/org/ow2/asm/asm-tree/9.9.1/asm-tree-9.9.1.jar' }
+    @{ Name = 'asm-tree-9.9.1.jar';              Url = 'https://repo1.maven.org/maven2/org/ow2/asm/asm-tree/9.9.1/asm-tree-9.9.1.jar' },
+    @{ Name = 'asm-commons-9.9.1.jar';           Url = 'https://repo1.maven.org/maven2/org/ow2/asm/asm-commons/9.9.1/asm-commons-9.9.1.jar' }
 )
 
 foreach ($a in $artifacts) {

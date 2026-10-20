@@ -226,6 +226,22 @@ public final class OptifinePack {
      * Locates the OptiFine jar: {@code -Doptiforge.optifine=}, then {@code <game>/optiforge/*.jar}.
      * A jar left in {@code mods/} is reported, not used - OptiFine's own service would run too.
      */
+    /** Cheap sanity check: does this zip actually carry OptiFine's classes? */
+    static boolean looksLikeOptifineJar(Path jar) {
+        try (java.util.zip.ZipFile zip = new java.util.zip.ZipFile(jar.toFile())) {
+            var entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                String name = entries.nextElement().getName();
+                if (name.startsWith("net/optifine/") || name.startsWith("srg/net/optifine/")
+                        || name.startsWith("notch/net/optifine/")) {
+                    return true;
+                }
+            }
+        } catch (IOException ignored) {
+            // unreadable: treat as "not OptiFine"
+        }
+        return false;
+    }
     public static Path findOptifineJar(Path gameDir, String override, StringBuilder notes) {
         if (override != null && !override.isBlank()) {
             Path p = Path.of(override);
@@ -235,12 +251,25 @@ public final class OptifinePack {
         if (gameDir != null) {
             Path dir = gameDir.resolve("optiforge");
             if (Files.isDirectory(dir)) {
+                // OptiFabric picks the OptiFine jar out of a folder of jars; here the folder exists only for
+                // it, but being picky keeps a stray jar from being patched: prefer names that say OptiFine,
+                // then any jar that actually carries OptiFine classes.
+                java.util.List<Path> jars = new java.util.ArrayList<>();
                 try (DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.jar")) {
-                    for (Path candidate : stream) {
-                        return candidate;
-                    }
+                    for (Path candidate : stream) jars.add(candidate);
                 } catch (IOException e) {
                     notes.append("could not list ").append(dir).append(": ").append(e).append('\n');
+                }
+                jars.sort(java.util.Comparator.comparing(
+                        (Path candidate) -> !candidate.getFileName().toString().toLowerCase(Locale.ROOT)
+                                .contains("optifine")));
+                for (Path candidate : jars) {
+                    if (candidate.getFileName().toString().toLowerCase(Locale.ROOT).contains("optifine")
+                            || looksLikeOptifineJar(candidate)) {
+                        return candidate;
+                    }
+                    notes.append("ignoring ").append(candidate.getFileName())
+                            .append(" (not an OptiFine jar)\n");
                 }
             }
             Path mods = gameDir.resolve("mods");
@@ -561,11 +590,91 @@ public final class OptifinePack {
     /** Classes visible on this launch; used to decide which foreign class literals are safe to keep. */
     private static volatile java.util.Set<String> visibleClasses = java.util.Set.of();
 
+    /** OptiFabric-style naming: a readable, versioned jar next to the OptiForge service jar. */
+    static String stagedJarName() {
+        return "OptiForge-" + Diagnose.VERSION + "-classes.jar";
+    }
+
+    /** The classes jar from older releases, removed so two mods cannot claim the same modId. */
+    static void removeLegacyStagedJar(Path gameDir) {
+        if (gameDir == null) return;
+        try {
+            java.nio.file.Files.deleteIfExists(gameDir.resolve("mods").resolve("optiforge-optifine-classes.jar"));
+        } catch (java.io.IOException ignored) {
+            // harmless: it is only dead weight
+        }
+    }
+
+    /**
+     * Writes a jar that carries only the in-game notice (no OptiFine classes).
+     *
+     * <p>Same shape as the full staged jar, so the mods list shows one entry, "OptiForge", whether or not
+     * OptiFine was found; the notice itself is driven by {@code -Doptiforge.missingOptifine=true}.
+     */
+    static void stageNoticeOnly(Path gameDir, StringBuilder notes) throws IOException {
+        Path mods = gameDir.resolve("mods");
+        Files.createDirectories(mods);
+        Path target = mods.resolve(stagedJarName());
+        notes.append("staging notice mod ").append(target.getFileName()).append('\n');
+        String toml = "modLoader=\"javafml\"\n"
+                + "loaderVersion=\"[1,)\"\n"
+                + "license=\"MPL 2.0\"\n"
+                + "\n"
+                + "[[mods]]\n"
+                + "modId=\"optiforge\"\n"
+                + "version=\"" + Diagnose.VERSION + "\"\n"
+                + "displayName=\"OptiForge\"\n"
+                + "description=\"OptiFine on Forge, with Forge Mod Loader loaded alongside.\"\n"
+                + "\n"
+                + "[[dependencies.optiforge]]\n"
+                + "modId=\"forge\"\n"
+                + "mandatory=true\n"
+                + "versionRange=\"[1,)\"\n"
+                + "ordering=\"NONE\"\n"
+                + "side=\"BOTH\"\n";
+        Path tmp = mods.resolve(target.getFileName() + ".tmp");
+        try (var out = new java.util.zip.ZipOutputStream(Files.newOutputStream(tmp))) {
+            put(out, "META-INF/MANIFEST.MF",
+                    ("Manifest-Version: 1.0\r\nImplementation-Title: OptiForge\r\n\r\n")
+                            .getBytes(StandardCharsets.UTF_8));
+            put(out, "META-INF/mods.toml", toml.getBytes(StandardCharsets.UTF_8));
+            put(out, "pack.mcmeta", ("{\"pack\":{\"pack_format\":" + packFormat(mcVersion)
+                    + ",\"description\":\"OptiForge\"}}\n").getBytes(StandardCharsets.UTF_8));
+            put(out, "optiforge/generated/GeneratedMod.class", generatedModClass());
+            put(out, "optiforge/generated/Notice.class", relocatedNotice());
+        }
+        Files.move(tmp, target, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
+    }
+
+    /** Bytes of {@link Notice}, renamed into the staged mod's own package. */
+    static byte[] relocatedNotice() {
+        try (var in = OptifinePack.class.getResourceAsStream("/kynarain/cn/optiforge/Notice.class")) {
+            if (in == null) throw new IOException("Notice.class is missing from the OptiForge jar");
+            byte[] original = in.readAllBytes();
+            // A plain name swap is not enough: self references (fields, methods) carry the old owner in
+            // their constant-pool entries, so the relocated copy was still reaching for
+            // kynarain.cn.optiforge.Notice - the copy in the service layer - and died with
+            // "IllegalAccessError: ... tried to access private field". ClassRemapper rewrites them all.
+            org.objectweb.asm.ClassWriter writer = new org.objectweb.asm.ClassWriter(0);
+            var remapper = new org.objectweb.asm.commons.Remapper() {
+                @Override
+                public String map(String internalName) {
+                    return "kynarain/cn/optiforge/Notice".equals(internalName)
+                            ? "optiforge/generated/Notice" : internalName;
+                }
+            };
+            new org.objectweb.asm.ClassReader(original)
+                    .accept(new org.objectweb.asm.commons.ClassRemapper(writer, remapper), 0);
+            return writer.toByteArray();
+        } catch (IOException e) {
+            throw new IllegalStateException("could not read Notice.class", e);
+        }
+    }
     private static void writeLibraryMod(Path gameDir, String key, Map<String, Path> own,
                                         Path optifineJar, StringBuilder notes) throws IOException {
         Path mods = gameDir.resolve("mods");
         Files.createDirectories(mods);
-        Path target = mods.resolve("optiforge-optifine-classes.jar");
+        Path target = mods.resolve(stagedJarName());
         // Rewritten on every launch on purpose: the file is derived data (it changes whenever the
         // OptiFine jar or the remap table changes), and a fixed name keeps mods/ free of stale copies
         // for other OptiFine builds. Writing ~2 MB costs a few tens of milliseconds.
@@ -616,7 +725,9 @@ public final class OptifinePack {
             // layer fail when a line does not have one.
             if (Boolean.getBoolean("optiforge.moduleInfo")) {
                 put(out, "module-info.class", moduleDescriptor());
-            }            put(out, "optiforge/generated/GeneratedMod.class", generatedModClass());
+            }
+            put(out, "optiforge/generated/GeneratedMod.class", generatedModClass());
+            put(out, "optiforge/generated/Notice.class", relocatedNotice());
             int stagedClasses = 0;
             if (stageClasses) {
                 for (Map.Entry<String, Path> entry : own.entrySet()) {
@@ -672,6 +783,9 @@ public final class OptifinePack {
         constructor.visitCode();
         constructor.visitVarInsn(org.objectweb.asm.Opcodes.ALOAD, 0);
         constructor.visitMethodInsn(org.objectweb.asm.Opcodes.INVOKESPECIAL, "java/lang/Object", "<init>", "()V", false);
+        // The in-game "OptiFine missing" prompt lives in Notice; it is a no-op when OptiFine was found.
+        constructor.visitMethodInsn(org.objectweb.asm.Opcodes.INVOKESTATIC,
+                "optiforge/generated/Notice", "startWatch", "()V", false);
         constructor.visitInsn(org.objectweb.asm.Opcodes.RETURN);
         constructor.visitMaxs(1, 1);
         constructor.visitEnd();

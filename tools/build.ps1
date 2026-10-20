@@ -43,8 +43,14 @@ $classpath = (Get-ChildItem $deps -Filter '*.jar' | ForEach-Object { $_.FullName
 $sources = Get-ChildItem (Join-Path $root 'src\main\java') -Recurse -Filter '*.java' | ForEach-Object { $_.FullName }
 
 Write-Host "javac $($sources.Count) file(s) with $Jdk"
+# javac writes notes (deprecated API, unchecked) to stderr; with the default Stop preference that aborted
+# the build even though compilation succeeded. Judge by the exit code only.
+$previousPreference = $ErrorActionPreference
+$ErrorActionPreference = 'Continue'
 & $javac -encoding UTF-8 --release 17 -Xlint:-options -cp $classpath -d $classes @sources
-if ($LASTEXITCODE -ne 0) { throw "javac failed with exit code $LASTEXITCODE" }
+$javacExit = $LASTEXITCODE
+$ErrorActionPreference = $previousPreference
+if ($javacExit -ne 0) { throw "javac failed with exit code $javacExit" }
 
 Copy-Item (Join-Path $root 'src\main\resources\*') $classes -Recurse -Force
 # The SRG->official tables live in data/ (source of truth) and are shipped as resources, so the jar
