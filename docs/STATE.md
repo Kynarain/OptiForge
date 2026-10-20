@@ -569,6 +569,10 @@ OptiFabric 的做法（`MixinTitleScreen`）：缺 OptiFine 时在标题界面�
 - 生成的 jar 根目录写 `optiforge_icon.png`，`mods.toml` 加 `logoFile="optiforge_icon.png"`
   （正常路径与"只有提示"的路径都写）；
 - 实测（1.20.1）：Mods 界面显示灰黑 OF 图标，名称 OptiForge、版本 0.11.1、ModId optiforge、License MPL 2.0。
+### 0.11.2：图标改成尖角
+
+按反馈把底板的圆角去掉：浅灰 `#ECECEC` **正方形**底板（128×128，无圆角）+ 灰黑 `#2B2B2B` 的 "OF"，
+字母按原始宽高比缩放到 92×49 并居中。`docs/icon.png` 同步为 512×512（最近邻放大，保持硬边）。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -1045,6 +1049,10 @@ OptiFabric 的做法（`MixinTitleScreen`）：缺 OptiFine 时在标题界面�
 - 生成的 jar 根目录写 `optiforge_icon.png`，`mods.toml` 加 `logoFile="optiforge_icon.png"`
   （正常路径与"只有提示"的路径都写）；
 - 实测（1.20.1）：Mods 界面显示灰黑 OF 图标，名称 OptiForge、版本 0.11.1、ModId optiforge、License MPL 2.0。
+### 0.11.2：图标改成尖角
+
+按反馈把底板的圆角去掉：浅灰 `#ECECEC` **正方形**底板（128×128，无圆角）+ 灰黑 `#2B2B2B` 的 "OF"，
+字母按原始宽高比缩放到 92×49 并居中。`docs/icon.png` 同步为 512×512（最近邻放大，保持硬边）。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
