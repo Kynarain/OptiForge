@@ -588,6 +588,12 @@ public final class OptifinePack {
                             + "Implementation-Title: OptiForge\r\n"
                             + "\r\n").getBytes(StandardCharsets.UTF_8));
             put(out, "META-INF/mods.toml", toml.getBytes(StandardCharsets.UTF_8));
+            // Without pack.mcmeta Forge refuses to expose this jar's assets as a resource pack ("failed to
+            // load a valid ResourcePackInfo"), and OptiFine's own text is then shown as raw keys
+            // (of.options.AO_LEVEL and friends) because its .lang files live in those assets.
+            put(out, "pack.mcmeta", ("{\"pack\":{\"pack_format\":" + packFormat(mcVersion)
+                    + ",\"description\":\"OptiForge - OptiFine resources\"}}\n")
+                    .getBytes(StandardCharsets.UTF_8));
             // A real javafml mod, not a library and not a transformer: measured here, a
             // FMLModType: LIBRARY jar lands in the PLUGIN layer whose parent is the app loader, so it
             // resolved the UNTRANSFORMED game classes and died with "IllegalAccessError ... private
@@ -678,7 +684,30 @@ public final class OptifinePack {
      * older OptiForge kept being reused and new fixes silently never ran - measured on 26.1.2, whose pack
      * still dated from before OwnRefs existed.
      */
-    private static final String PACK_VERSION = "v4";
+
+    /** Vanilla resource pack format for the running line; mods only need it to be well formed. */
+    static int packFormat(String mcVersion) {
+        if (mcVersion == null) return 15;
+        String v = mcVersion.trim();
+        return switch (v) {
+            case "1.20", "1.20.1" -> 15;
+            case "1.20.2" -> 18;
+            case "1.20.3", "1.20.4" -> 22;
+            case "1.20.5", "1.20.6" -> 32;
+            case "1.21", "1.21.1" -> 34;
+            case "1.21.2", "1.21.3" -> 42;
+            case "1.21.4" -> 46;
+            case "1.21.5" -> 55;
+            case "1.21.6" -> 63;
+            case "1.21.7", "1.21.8" -> 64;
+            case "1.21.9" -> 69;
+            case "1.21.10" -> 71;
+            case "1.21.11" -> 75;
+            default -> v.startsWith("26.") ? 80 : 15;
+        };
+    }
+
+    private static final String PACK_VERSION = "v5";
 
     private static String key(Path optifineJar, Path baseJar) {
         String a = hashFile(optifineJar, 16);

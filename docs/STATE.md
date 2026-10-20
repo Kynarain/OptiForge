@@ -512,6 +512,20 @@ OptiFine jar 里也没有 `ForgeGui` 的补丁条目（只有 `notch/net/minecra
 
 修法：合并时若**父类不一致**（`hierarchyChanged`），跳过所有含 `super.` 调用（`invokespecial` 到非自身类）
 的方法。离线验证：对同一份入参，合并后不再包含 `m_6050_`。
+### 0.9.3：OptiFine 文本显示成键名（mod jar 没有 pack.mcmeta）
+
+现象：视频设置里 OptiFine 的条目是键名（`of.options.AO_LEVEL`、`of.options.DYNAMIC_LIGHTS`、
+`of.options.shadersTitle`…），原版条目正常。截图确认后看日志，有两处线索：
+
+1. 启动警告界面：`optiforge-optifine-classes.jar failed to load a valid ResourcePackInfo`；
+2. 日志：`Missing metadata in pack mod:optiforge_optifine_classes`。
+
+原因：我们 stage 的 jar 只有 `assets/**` 而没有 `pack.mcmeta`，Forge 不把它注册成资源包，于是
+OptiFine 的 `Lang.resourcesReloaded()` 读不到 `assets/minecraft/optifine/lang/<locale>.lang`
+（OptiFine 的 UI 文本全在这些 `.lang` 里，`zh_cn.lang` 的 672 个键是齐的，所以不是翻译缺条目）。
+
+修法：stage 时写入 `pack.mcmeta`（`pack_format` 按 MC 版本给：1.20.1 → 15 等），`PACK_VERSION` → `v5`。
+验证：两条警告都不再出现，`pack v5-…` 正常构建，118 条 `[OptiFine]`、0 崩溃。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -931,6 +945,20 @@ OptiFine jar 里也没有 `ForgeGui` 的补丁条目（只有 `notch/net/minecra
 
 修法：合并时若**父类不一致**（`hierarchyChanged`），跳过所有含 `super.` 调用（`invokespecial` 到非自身类）
 的方法。离线验证：对同一份入参，合并后不再包含 `m_6050_`。
+### 0.9.3：OptiFine 文本显示成键名（mod jar 没有 pack.mcmeta）
+
+现象：视频设置里 OptiFine 的条目是键名（`of.options.AO_LEVEL`、`of.options.DYNAMIC_LIGHTS`、
+`of.options.shadersTitle`…），原版条目正常。截图确认后看日志，有两处线索：
+
+1. 启动警告界面：`optiforge-optifine-classes.jar failed to load a valid ResourcePackInfo`；
+2. 日志：`Missing metadata in pack mod:optiforge_optifine_classes`。
+
+原因：我们 stage 的 jar 只有 `assets/**` 而没有 `pack.mcmeta`，Forge 不把它注册成资源包，于是
+OptiFine 的 `Lang.resourcesReloaded()` 读不到 `assets/minecraft/optifine/lang/<locale>.lang`
+（OptiFine 的 UI 文本全在这些 `.lang` 里，`zh_cn.lang` 的 672 个键是齐的，所以不是翻译缺条目）。
+
+修法：stage 时写入 `pack.mcmeta`（`pack_format` 按 MC 版本给：1.20.1 → 15 等），`PACK_VERSION` → `v5`。
+验证：两条警告都不再出现，`pack v5-…` 正常构建，118 条 `[OptiFine]`、0 崩溃。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
