@@ -589,6 +589,11 @@ Mods 界面此前只显示名称/版本/ModId/协议，缺作者与链接。现�
 （`build.ps1` 与 Gradle 两处都写，`mod_authors` 出现在 `gradle.properties`）；README 增加"作者与链接"一节。
 
 实测（1.20.1）：Mods 界面显示 Authors: Kynarain、Credits、可点击的 Homepage、License: MPL 2.0。
+### 0.12.1：Credits 精简
+
+`credits` 从"OptiFine by sp614x. OptiFabric (Chocohead) for the Fabric-side approach."缩短为
+`"OptiFine by sp614x"`——mods 界面里 Credits 只写真正的上游依赖；OptiFabric 的参考关系保留在 README 的
+Credits 一行里。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -1085,6 +1090,11 @@ Mods 界面此前只显示名称/版本/ModId/协议，缺作者与链接。现�
 （`build.ps1` 与 Gradle 两处都写，`mod_authors` 出现在 `gradle.properties`）；README 增加"作者与链接"一节。
 
 实测（1.20.1）：Mods 界面显示 Authors: Kynarain、Credits、可点击的 Homepage、License: MPL 2.0。
+### 0.12.1：Credits 精简
+
+`credits` 从"OptiFine by sp614x. OptiFabric (Chocohead) for the Fabric-side approach."缩短为
+`"OptiFine by sp614x"`——mods 界面里 Credits 只写真正的上游依赖；OptiFabric 的参考关系保留在 README 的
+Credits 一行里。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用

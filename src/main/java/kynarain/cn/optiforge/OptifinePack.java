@@ -605,7 +605,7 @@ public final class OptifinePack {
                 + "version=\"" + Diagnose.VERSION + "\"\n"
                 + "displayName=\"OptiForge\"\n"
                 + "authors=\"Kynarain\"\n"
-                + "credits=\"OptiFine by sp614x. OptiFabric (Chocohead) for the Fabric-side approach.\"\n"
+                + "credits=\"OptiFine by sp614x\"\n"
                 + "description=\"OptiFine on Forge, with Forge Mod Loader loaded alongside.\"\n"
                 + "logoFile=\"optiforge_icon.png\"\n"
                 + "displayURL=\"https://github.com/Kynarain/OptiForge\"\n"
