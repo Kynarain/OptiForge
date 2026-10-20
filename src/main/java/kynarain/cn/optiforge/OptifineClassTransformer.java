@@ -93,6 +93,13 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         for (org.objectweb.asm.tree.MethodNode method : prepared.methods) {
             methods.add(method.name + method.desc);
         }
+        // OptiFine sometimes re-parents a class. Methods from the original hierarchy can then not be merged:
+        // their super calls point at a class that is no longer in the chain. Measured on 1.20.1: OptiFine's
+        // VideoSettingsScreen extends net.optifine.gui.GuiScreenOF, the merged vanilla mouseClicked came from
+        // an OptionsSubScreen hierarchy, and opening Video Settings died with
+        // "VerifyError: Bad invokespecial instruction: current class isn't assignable to reference class".
+        boolean hierarchyChanged = incoming.superName != null
+                && !incoming.superName.equals(prepared.superName);
         java.util.List<org.objectweb.asm.tree.MethodNode> adoptedMethods = new java.util.ArrayList<>();
         for (org.objectweb.asm.tree.MethodNode method : incoming.methods) {
             // Never carry over initialisers. OptiFine's payload sometimes turns a vanilla static field
@@ -100,6 +107,7 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
             // vanilla <clinit> along then produced "IncompatibleClassChangeError: Expected static field"
             // on the first launch that used the merged class.
             if (method.name.equals("<clinit>") || method.name.equals("<init>")) continue;
+            if (hierarchyChanged && hasSuperCall(method, incoming.name)) continue;
             if (methods.add(method.name + method.desc)) {
                 prepared.methods.add(method);
                 adoptedMethods.add(method);
@@ -124,6 +132,16 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         guardAdoptedFieldReads(prepared, adopted, adoptedMethods);
     }
 
+    /** @return true when the method calls into a class other than itself through invokespecial. */
+    private static boolean hasSuperCall(org.objectweb.asm.tree.MethodNode method, String selfName) {
+        for (org.objectweb.asm.tree.AbstractInsnNode instruction : method.instructions) {
+            if (!(instruction instanceof org.objectweb.asm.tree.MethodInsnNode call)) continue;
+            if (call.getOpcode() != Opcodes.INVOKESPECIAL) continue;
+            if (call.owner.equals(selfName)) continue;
+            return true;
+        }
+        return false;
+    }
     /** Inserts "if (FIELD == null) FIELD = <empty container>;" before each read of an adopted field. */
     private static void guardAdoptedFieldReads(org.objectweb.asm.tree.ClassNode prepared,
                                                java.util.List<org.objectweb.asm.tree.FieldNode> adopted,

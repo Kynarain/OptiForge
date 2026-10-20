@@ -499,6 +499,19 @@ OptiFine jar 里也没有 `ForgeGui` 的补丁条目（只有 `notch/net/minecra
 
 实测（用户同实例、Java 22、PCL profile）：`Setting user`、`Sound engine started`、112 条 `[OptiFine]`、
 0 崩溃；索引 38351 个类、误删 0 个。回归：1.21.7 仍 `joined the game`、0 崩溃。
+### 0.9.2：视频设置界面崩溃（OptiFine 改父类后误并了旧继承链的方法）
+
+用户点"视频设置"时崩：
+
+    VerifyError: Bad invokespecial instruction: current class isn't assignable to reference class.
+      at VideoSettingsScreen.m_6050_(DDD)Z @82
+
+原因：OptiFine 的 `VideoSettingsScreen` 被**改父类**成 `net.optifine.gui.GuiScreenOF`，
+而运行时合并把原版（父类 `OptionsSubScreen`）的 `mouseClicked`（`m_6050_`）也并了进来——
+里面的 `super.mouseClicked(...)` 指向已经不在继承链上的类 → 校验失败。
+
+修法：合并时若**父类不一致**（`hierarchyChanged`），跳过所有含 `super.` 调用（`invokespecial` 到非自身类）
+的方法。离线验证：对同一份入参，合并后不再包含 `m_6050_`。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -905,6 +918,19 @@ OptiFine jar 里也没有 `ForgeGui` 的补丁条目（只有 `notch/net/minecra
 
 实测（用户同实例、Java 22、PCL profile）：`Setting user`、`Sound engine started`、112 条 `[OptiFine]`、
 0 崩溃；索引 38351 个类、误删 0 个。回归：1.21.7 仍 `joined the game`、0 崩溃。
+### 0.9.2：视频设置界面崩溃（OptiFine 改父类后误并了旧继承链的方法）
+
+用户点"视频设置"时崩：
+
+    VerifyError: Bad invokespecial instruction: current class isn't assignable to reference class.
+      at VideoSettingsScreen.m_6050_(DDD)Z @82
+
+原因：OptiFine 的 `VideoSettingsScreen` 被**改父类**成 `net.optifine.gui.GuiScreenOF`，
+而运行时合并把原版（父类 `OptionsSubScreen`）的 `mouseClicked`（`m_6050_`）也并了进来——
+里面的 `super.mouseClicked(...)` 指向已经不在继承链上的类 → 校验失败。
+
+修法：合并时若**父类不一致**（`hierarchyChanged`），跳过所有含 `super.` 调用（`invokespecial` 到非自身类）
+的方法。离线验证：对同一份入参，合并后不再包含 `m_6050_`。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
