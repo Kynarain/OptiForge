@@ -51,6 +51,9 @@ public final class LegacyProbe {
         Path forgeJar = null;
         Path binpatchesJar = null;
         Path gameDir = Paths.get("build", "phase3", "packtest");
+        String pluginClass = "kynarain.cn.optiforge.legacy.OptiForgeLegacyCorePlugin";
+        String mc = "1.12.2";
+        boolean noDrift = false;
 
         for (int i = 0; i < args.length; i++) {
             String arg = args[i];
@@ -66,9 +69,16 @@ public final class LegacyProbe {
                 binpatchesJar = Paths.get(args[++i]);
             } else if ("--gamedir".equals(arg)) {
                 gameDir = Paths.get(args[++i]);
+            } else if ("--plugin-class".equals(arg)) {
+                pluginClass = args[++i];
+            } else if ("--mc".equals(arg)) {
+                mc = args[++i];
+            } else if ("--no-drift".equals(arg)) {
+                noDrift = true;
             } else if ("--help".equals(arg) || "-h".equals(arg)) {
                 System.out.println("usage: LegacyProbe --optifine <jar> [--base <jar>] [--forge-home <mc root>]"
-                        + " [--forge-jar <universal jar>] [--binpatches <unpacked jar>] [--gamedir <dir>]");
+                        + " [--forge-jar <universal jar>] [--binpatches <unpacked jar>] [--gamedir <dir>]"
+                        + " [--plugin-class <fqcn>] [--mc <version>] [--no-drift]");
                 return;
             } else {
                 throw new IllegalArgumentException("unknown argument: " + arg);
@@ -121,12 +131,19 @@ public final class LegacyProbe {
         int srg = 0;
         int own = 0;
         for (Map.Entry<String, byte[]> entry : pack.ownClasses().entrySet()) {
-            if (!entry.getKey().startsWith("net/optifine/")) {
+            // OptiFine's own classes are net/optifine/** on 1.8+, but sit in the default package (plus
+            // shadersmod/** and net/optifine/entity/model/anim/**) on 1.7.10. Forge API stubs shipped by
+            // the 1.8+ jars are not OptiFine code.
+            if (entry.getKey().startsWith("net/minecraftforge/")) {
                 continue;
             }
             own++;
             srg += LegacyPayload.srgTokens(entry.getValue());
         }
+        String style = pack.ownClasses().containsKey("optifine/IOptiFineResourceLocator.class")
+                ? "1.8+-style (net/optifine classes, resource-locator contract)"
+                : "1.7.10-style (own classes in the default package, no resource-locator contract)";
+        System.out.println("style         : " + style);
 
         Drift drift = new Drift();
         if (binpatchesJar != null && forgeJar != null) {
@@ -138,7 +155,7 @@ public final class LegacyProbe {
                 && pack.md5Failure() == 0
                 && pack.md5Ok() == pack.patchCount()
                 && srg == 0
-                && drift.available;
+                && (drift.available || noDrift);
 
         System.out.println("drift         : " + (drift.available
                 ? drift.forgeExtraClasses + " classes where the Forge runtime has members the payload lacks"
@@ -148,10 +165,10 @@ public final class LegacyProbe {
         for (String line : drift.details) {
             System.out.println("                " + line);
         }
-        String coremod = coremodCheck(forgeHome, drift);
+        String coremod = coremodCheck(forgeHome, drift, pluginClass);
         System.out.println("coremod       : " + coremod);
         ok = ok && coremod.startsWith("OK");
-        String discovery = discoveryCheck(gameDir, base);
+        String discovery = discoveryCheck(gameDir, base, mc);
         System.out.println("discovery     : " + discovery);
         ok = ok && discovery.startsWith("OK");
         if (notes.length() > 0) {
@@ -406,16 +423,31 @@ public final class LegacyProbe {
         }
     }
 
+    /**
+     * Applies one FML binpatch with FML's own {@code GDiffPatcher}.
+     *
+     * <p>Measured: 1.8.9-1.12.2 repackage it as {@code net.minecraftforge.fml.repackage.com.nothome.delta},
+     * 1.7.10 as {@code cpw.mods.fml.repackage.com.nothome.delta}; both jar layouts are tried.
+     */
     private static byte[] gdiff(Path forgeJar, byte[] vanillaBytes, byte[] patch) {
+        String[] classNames = {
+                "net.minecraftforge.fml.repackage.com.nothome.delta.GDiffPatcher",
+                "cpw.mods.fml.repackage.com.nothome.delta.GDiffPatcher"};
         try {
             URLClassLoader loader = new URLClassLoader(new URL[]{forgeJar.toUri().toURL()},
                     LegacyProbe.class.getClassLoader());
             try {
-                Class<?> gdiffClass = Class.forName(
-                        "net.minecraftforge.fml.repackage.com.nothome.delta.GDiffPatcher", true, loader);
-                Object patcher = gdiffClass.getConstructor().newInstance();
-                Method patchMethod = gdiffClass.getMethod("patch", byte[].class, byte[].class);
-                return (byte[]) patchMethod.invoke(patcher, vanillaBytes, patch);
+                for (String className : classNames) {
+                    try {
+                        Class<?> gdiffClass = Class.forName(className, true, loader);
+                        Object patcher = gdiffClass.getConstructor().newInstance();
+                        Method patchMethod = gdiffClass.getMethod("patch", byte[].class, byte[].class);
+                        return (byte[]) patchMethod.invoke(patcher, vanillaBytes, patch);
+                    } catch (Throwable ignored) {
+                        // try the next repackage layout
+                    }
+                }
+                return null;
             } finally {
                 loader.close();
             }
@@ -427,28 +459,28 @@ public final class LegacyProbe {
     // ------------------------------------------------------------- discovery
 
     /**
-     * The discovery rules that a real 1.12.2 launch needed, exercised offline: the profile-id suffix cut
-     * from {@code --version}, the ancestor walk from an instance directory to a shared {@code versions/},
-     * the class-path jar named {@code <mc>-forge-<ver>.jar} (content-validated) and the
-     * {@code -Doptiforge.vanilla} fallback.
+     * The discovery rules that a real launch needed, exercised offline for the given MC version: the
+     * profile-id suffix cut from {@code --version}, the ancestor walk from an instance directory to a
+     * shared {@code versions/}, the class-path jar named {@code <mc>-forge-<ver>.jar} (content-validated)
+     * and the {@code -Doptiforge.vanilla} fallback.
      */
-    private static String discoveryCheck(Path gameDir, Path base) {
+    private static String discoveryCheck(Path gameDir, Path base, String mc) {
         try {
             String fromCommand = LegacyPaths.mcVersionFromLaunchCommand(
-                    "net.minecraft.launchwrapper.Launch --username Dev --version 1.12.2-forge-14.23.5.2860"
-                            + " --gameDir .");
-            if (!"1.12.2".equals(fromCommand)) {
+                    "net.minecraft.launchwrapper.Launch --username Dev --version " + mc
+                            + "-forge-1.0.0 --gameDir .");
+            if (!mc.equals(fromCommand)) {
                 return "FAIL --version parse gave " + fromCommand;
             }
             String fromUppercase = LegacyPaths.mcVersionFromLaunchCommand(
-                    "Launch --version 1.12.2-Forge_14.23.5.2860");
-            if (!"1.12.2".equals(fromUppercase)) {
+                    "Launch --version " + mc + "-Forge_1.0.0");
+            if (!mc.equals(fromUppercase)) {
                 return "FAIL -Forge_ parse gave " + fromUppercase;
             }
 
             Path root = gameDir.resolve("selftest-rig");
             Path instance = root.resolve("instance");
-            Path vanilla = root.resolve("versions").resolve("1.12.2").resolve("1.12.2.jar");
+            Path vanilla = root.resolve("versions").resolve(mc).resolve(mc + ".jar");
             Files.createDirectories(vanilla.getParent());
             Files.createDirectories(instance);
             if (!Files.isRegularFile(vanilla) || Files.size(vanilla) < 1000) {
@@ -456,22 +488,22 @@ public final class LegacyProbe {
                 Files.copy(base, vanilla);
             }
             StringBuilder notes = new StringBuilder();
-            Path found = LegacyPaths.findBaseJar(instance, "1.12.2", null, notes);
+            Path found = LegacyPaths.findBaseJar(instance, mc, null, notes);
             if (found == null || !found.equals(vanilla)) {
                 return "FAIL ancestor walk gave " + found;
             }
             StringBuilder overrideNotes = new StringBuilder();
-            Path viaOverride = LegacyPaths.findBaseJar(instance, "9.99", vanilla.toString(), overrideNotes);
+            Path viaOverride = LegacyPaths.findBaseJar(instance, "0.0", vanilla.toString(), overrideNotes);
             if (viaOverride == null || !viaOverride.equals(vanilla)) {
                 return "FAIL -Doptiforge.vanilla fallback gave " + viaOverride;
             }
             // no FMLInjectionData and no --version in this JVM: the versions dir one level up must win
             String scanned = LegacyPaths.detectMcVersion(instance);
-            if (!"1.12.2".equals(scanned)) {
+            if (!mc.equals(scanned)) {
                 return "FAIL ancestor versions scan gave " + scanned;
             }
-            String override = LegacyPaths.detectMcVersion(instance, "1.12.2", new StringBuilder());
-            if (!"1.12.2".equals(override)) {
+            String override = LegacyPaths.detectMcVersion(instance, mc, new StringBuilder());
+            if (!mc.equals(override)) {
                 return "FAIL -Doptiforge.mcversion gave " + override;
             }
 
@@ -480,12 +512,13 @@ public final class LegacyProbe {
             if (!LegacyPaths.looksLikeClientJar(base)) {
                 return "FAIL base jar does not look like a client jar";
             }
-            Path cpRoot = Files.createDirectories(gameDir.resolve("selftest-classpath"));
-            Path profileJar = cpRoot.resolve("1.12.2-forge-14.23.5.2860.jar");
-            if (!Files.isRegularFile(profileJar)) {
+            Path cpRoot = Files.createDirectories(gameDir.resolve("selftest-classpath-" + mc));
+            Path profileJar = cpRoot.resolve(mc + "-forge-1.0.0.jar");
+            if (!Files.isRegularFile(profileJar) || Files.size(profileJar) < 1000) {
+                Files.deleteIfExists(profileJar);
                 Files.copy(base, profileJar);
             }
-            Path emptyJar = cpRoot.resolve("1.12.2-forge-9.9.9.jar");
+            Path emptyJar = cpRoot.resolve(mc + "-forge-0.0.0.jar");
             if (!Files.isRegularFile(emptyJar)) {
                 Files.write(emptyJar, new byte[0]);
             }
@@ -494,20 +527,20 @@ public final class LegacyProbe {
                 System.setProperty("java.class.path", profileJar.toString());
                 Path cpInstance = Files.createDirectories(cpRoot.resolve("instance"));
                 StringBuilder cpNotes = new StringBuilder();
-                Path fromClassPath = LegacyPaths.findBaseJar(cpInstance, "1.12.2", null, cpNotes);
+                Path fromClassPath = LegacyPaths.findBaseJar(cpInstance, mc, null, cpNotes);
                 if (fromClassPath == null || !fromClassPath.equals(profileJar)
                         || !cpNotes.toString().contains("java.class.path")) {
                     return "FAIL class path rule gave " + fromClassPath + " / " + cpNotes;
                 }
                 System.setProperty("java.class.path", emptyJar.toString());
-                Path fromBroken = LegacyPaths.findBaseJar(cpInstance, "1.12.2", null, new StringBuilder());
+                Path fromBroken = LegacyPaths.findBaseJar(cpInstance, mc, null, new StringBuilder());
                 if (fromBroken != null) {
                     return "FAIL a zero-byte class path jar was accepted: " + fromBroken;
                 }
             } finally {
                 System.setProperty("java.class.path", saved);
             }
-            return "OK --version=1.12.2, ancestor versions walk, java.class.path profile jar,"
+            return "OK --version=" + mc + ", ancestor versions walk, java.class.path profile jar,"
                     + " -Doptiforge.vanilla and -Doptiforge.mcversion";
         } catch (Throwable t) {
             return "FAIL " + t;
@@ -517,13 +550,14 @@ public final class LegacyProbe {
     // ---------------------------------------------------------------- coremod
 
     /**
-     * Proves FML 1.12.2 can use the artifact, without starting the game: loads the plugin through a class
-     * loader containing the real Forge/launchwrapper/ASM 5.2 jars, checks the manifest contract by
-     * instantiating {@code IFMLLoadingPlugin}, and (when a drifted class was measured) runs the merge with
-     * ASM 5.2 - the exact ASM release that runtime provides - then parses the result with it.
+     * Proves FML can use the artifact, without starting the game: loads the plugin through a class loader
+     * containing the real Forge/launchwrapper/ASM jars, resolves whichever {@code IFMLLoadingPlugin}
+     * package the target FML ships (1.7.10: {@code cpw.mods.fml}, 1.8+: {@code net.minecraftforge.fml}),
+     * checks the annotation set by instantiating the plugin, and (when a drifted class was measured) runs
+     * the merge with the exact ASM release that runtime provides, then parses the result with it.
      */
     @SuppressWarnings("unchecked")
-    private static String coremodCheck(Path forgeHome, Drift drift) {
+    private static String coremodCheck(Path forgeHome, Drift drift, String pluginClassName) {
         try {
             Path forgeJar = LegacyPaths.findForgeJar(forgeHome);
             Path launchwrapper = LegacyPaths.findLaunchWrapperJar(forgeHome);
@@ -539,28 +573,46 @@ public final class LegacyProbe {
                     asm.toUri().toURL()},
                     ClassLoader.getSystemClassLoader().getParent());
             try {
-                Class<?> plugin = Class.forName("kynarain.cn.optiforge.legacy.OptiForgeLegacyCorePlugin",
-                        true, loader);
-                Class<?> pluginContract = Class.forName(
-                        "net.minecraftforge.fml.relauncher.IFMLLoadingPlugin", true, loader);
-                if (!pluginContract.isAssignableFrom(plugin)) {
-                    return "FAIL plugin does not implement IFMLLoadingPlugin";
+                Class<?> plugin = Class.forName(pluginClassName, true, loader);
+                String[] packages = {"net.minecraftforge.fml.relauncher", "cpw.mods.fml.relauncher"};
+                Class<?> pluginContract = null;
+                String contractName = null;
+                for (String pkg : packages) {
+                    try {
+                        Class<?> candidate = Class.forName(pkg + ".IFMLLoadingPlugin", false, loader);
+                        if (candidate.isAssignableFrom(plugin)) {
+                            pluginContract = candidate;
+                            contractName = pkg + ".IFMLLoadingPlugin";
+                            break;
+                        }
+                    } catch (Throwable ignored) {
+                        // this FML package layout is not present in the target runtime
+                    }
                 }
-                Class<?> mcVersionAnnotation = Class.forName(
-                        "net.minecraftforge.fml.relauncher.IFMLLoadingPlugin$MCVersion", true, loader);
+                if (pluginContract == null) {
+                    return "FAIL plugin does not implement either IFMLLoadingPlugin layout";
+                }
+                String annotationPrefix = contractName.substring(0, contractName.lastIndexOf('.'));
                 Class<?> sortingAnnotation = Class.forName(
-                        "net.minecraftforge.fml.relauncher.IFMLLoadingPlugin$SortingIndex", true, loader);
+                        annotationPrefix + ".IFMLLoadingPlugin$SortingIndex", true, loader);
                 // @MCVersion is deliberately absent: FML 1.12.2 rejected the bracketed range against
-                // Loader.MC_VERSION and ignored the coremod entirely ("It will be ignored"). The payload md5
-                // check is the real guard, so only @SortingIndex is required here.
-                Object mcAnnotation = plugin.getAnnotation((Class) mcVersionAnnotation);
+                // Loader.MC_VERSION and ignored the coremod entirely, so only @SortingIndex is required.
                 Object sorting = plugin.getAnnotation((Class) sortingAnnotation);
                 if (sorting == null) {
                     return "FAIL plugin is missing @SortingIndex";
                 }
-                String mcVersion = mcAnnotation == null ? "none"
-                        : (String) mcVersionAnnotation.getMethod("value").invoke(mcAnnotation);
                 int sortingIndex = ((Integer) sortingAnnotation.getMethod("value").invoke(sorting)).intValue();
+                String mcVersion = "none";
+                try {
+                    Class<?> mcVersionAnnotation = Class.forName(
+                            annotationPrefix + ".IFMLLoadingPlugin$MCVersion", true, loader);
+                    Object annotation = plugin.getAnnotation((Class) mcVersionAnnotation);
+                    if (annotation != null) {
+                        mcVersion = (String) mcVersionAnnotation.getMethod("value").invoke(annotation);
+                    }
+                } catch (Throwable ignored) {
+                    // older FML may not have @MCVersion at all
+                }
 
                 Object instance = plugin.getConstructor().newInstance();
                 String[] transformers = (String[]) plugin.getMethod("getASMTransformerClass").invoke(instance);
@@ -603,9 +655,10 @@ public final class LegacyProbe {
                     }
                     merged = "; merge " + drift.sampleName + " adopted " + added + " member(s)";
                 }
-                return "OK plugin=" + plugin.getSimpleName() + " mc=\"" + mcVersion + "\" sorting="
+                return "OK plugin=" + plugin.getSimpleName() + " contract=" + pluginContract.getSimpleName()
+                        + " (" + contractName + ") mc=\"" + mcVersion + "\" sorting="
                         + sortingIndex + " transformer=" + transformer.getSimpleName()
-                        + " asm5.2=parsed" + merged;
+                        + " asm=parsed" + merged;
             } finally {
                 loader.close();
             }

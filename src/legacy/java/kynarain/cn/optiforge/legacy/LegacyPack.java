@@ -309,6 +309,12 @@ public final class LegacyPack {
             }
             LegacyPayload payload = new LegacyPayload(optifineJar);
             try {
+                // Config.getBuild() reads /buildof.txt from its own jar (measured from the 1.7.10 build);
+                // harmless metadata, but cheap to keep working.
+                byte[] buildof = payload.readEntryOrNull("buildof.txt");
+                if (buildof != null) {
+                    put(out, "buildof.txt", buildof);
+                }
                 for (Map.Entry<String, byte[]> entry : payload.assets().entrySet()) {
                     put(out, entry.getKey(), entry.getValue());
                 }

@@ -49,6 +49,36 @@ public final class SrgRemap {
         return new SrgRemap(map);
     }
 
+    /**
+     * Loads a renumbering table: the first two columns are {@code oldId<TAB>newId}; further columns
+     * ({@code kind}, {@code owner-obf}, {@code descriptor}) are documentation only. Used for the
+     * 1.17.1 G9 payload, whose ids come from a provisional mapping.
+     */
+    public static SrgRemap loadRenumber(Path tsv) throws IOException {
+        try (java.io.InputStream in = Files.newInputStream(tsv)) {
+            return loadRenumber(in);
+        }
+    }
+
+    public static SrgRemap loadRenumber(java.io.InputStream in) throws IOException {
+        Map<String, String> map = new HashMap<>(1 << 12);
+        java.io.BufferedReader reader = new java.io.BufferedReader(
+                new java.io.InputStreamReader(in, StandardCharsets.UTF_8));
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (line.isEmpty() || line.charAt(0) == '#') continue;
+            if (line.startsWith("old\t")) continue; // table header
+            int tab = line.indexOf('\t');
+            if (tab <= 0) continue;
+            int next = line.indexOf('\t', tab + 1);
+            String oldName = line.substring(0, tab);
+            String newName = next < 0 ? line.substring(tab + 1) : line.substring(tab + 1, next);
+            if (oldName.isEmpty() || newName.isEmpty()) continue;
+            map.put(oldName, newName);
+        }
+        return new SrgRemap(map);
+    }
+
     /** The official name for an SRG id, or null when the table does not carry it. */
     public String officialName(String srg) {
         return srg == null ? null : srgToOfficial.get(srg);

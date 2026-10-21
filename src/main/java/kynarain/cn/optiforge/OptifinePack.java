@@ -806,13 +806,36 @@ public final class OptifinePack {
                     .append(blocked.size()).append(" left unrenamed to avoid collisions\n");
         }
 
+        SrgRemap srgRenumber = loadSrgRenumber(notes);
+        if (srgRenumber != null) {
+            Map<String, byte[]> renumbered = new LinkedHashMap<>();
+            int renumberTokens = 0;
+            for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
+                SrgRemap.Result result = srgRenumber.remap(entry.getValue());
+                if (result.renamed > 0) {
+                    renumbered.put(entry.getKey(), result.bytes);
+                    renumberTokens += result.renamed;
+                }
+            }
+            if (renumberTokens < 64) {
+                // H1 and later builds already use the final ids. A handful of coincidental id overlaps must
+                // not be renamed (they are different members in the final table).
+                notes.append("SRG renumber: skipped (payload already uses final ids; ")
+                        .append(renumberTokens).append(" coincidental token(s) left untouched)\n");
+                srgRenumber = null;
+            } else {
+                patched.putAll(renumbered);
+                notes.append("SRG renumber: ").append(renumberTokens).append(" token(s) in ")
+                        .append(renumbered.size()).append(" patched class(es)\n");
+            }
+        }
         Map<String, Path> own = new LinkedHashMap<>();
         if (cacheRoot != null) {
-            writeCache(cacheRoot, key, patched, optifineJar, remap, obfRemap, notes, blocked);
+            writeCache(cacheRoot, key, patched, optifineJar, remap, obfRemap, srgRenumber, notes, blocked);
             own = collectOwnClasses(cacheRoot, notes);
         }
         if (own.isEmpty()) {
-            own = writeOwnToTemp(optifineJar, remap, obfRemap, notes, blocked);
+            own = writeOwnToTemp(optifineJar, remap, obfRemap, srgRenumber, notes, blocked);
         }
         if (gameDir != null && !own.isEmpty() ) {
             // The game can only see net.optifine.** if it is part of a module in the GAME layer. On
@@ -966,16 +989,20 @@ public final class OptifinePack {
     /**
      * Whether OptiFine's {@code patch/assets/**} payloads are materialised and staged.
      *
-     * <p>Measured on the Lead's rig: with the payload assets present, OptiFine actually compiles the
-     * default CTM set (1685 textures) during "Reloading custom textures" and the 1.16.5 client did not
-     * finish a reload inside 245 s; without them (missing textures) the reload is quick. The staged asset
-     * tree is byte-identical to the official {@code OptiFine-1.16.5_HD_U_G8.jar} mod jar (1732/1732 files,
-     * zero different), so this is OptiFine's CTM work in this environment, not jar layout. The payloads are
-     * therefore opt-in: {@code -Doptiforge.assets=staged} restores them, the default keeps loading cheap.
+     * <p>Default is {@code staged}: without the payloads OptiFine keeps asking for
+     * {@code assets/minecraft/optifine/ctm/default/**.png} and the log fills with "Using missing texture",
+     * which is what users see as broken connected textures. The payload tree is byte-identical to the
+     * official mod-form OptiFine jar (1732/1732 files on 1.16.5), and it is produced through the line's
+     * {@code client-<mc>-extra.jar} once per pack cache, so a second launch costs nothing.
+     *
+     * <p>Measured cost on the Lead's rig: with the payloads present, OptiFine compiles the default CTM set
+     * during "Reloading custom textures" (1.16.5 took ~245 s before the first title screen, 1.13.2 stalled
+     * long enough to look like a hang), so {@code -Doptiforge.assets=none} stays available as the cheap
+     * fallback for slow machines or for users who do not use CTM.
      */
     static boolean stagedAssetsEnabled() {
-        String mode = System.getProperty("optiforge.assets", "none").trim().toLowerCase(java.util.Locale.ROOT);
-        return mode.equals("staged") || mode.equals("all") || mode.equals("true");
+        String mode = System.getProperty("optiforge.assets", "staged").trim().toLowerCase(java.util.Locale.ROOT);
+        return !(mode.equals("none") || mode.equals("off") || mode.equals("false"));
     }
 
     private static void ensureAssetPayloads(Path gameDir, Path cacheRoot, Path optifineJar,
@@ -1235,7 +1262,7 @@ public final class OptifinePack {
         }
     }
 
-    private static final String PACK_VERSION = "v8"; // v8: 1.13.2 obf->runtime bridge, AT replay v7
+    private static final String PACK_VERSION = "v10"; // v10: renumber own classes too; v9: 1.17.1 G9 renumber; v8: 1.13.2 bridge
 
     /** Dotted class name of a patched class, read from its own bytes (obf remap changes it). */
     private static String classNameOf(byte[] classBytes, String fallbackLogical) {
@@ -1335,9 +1362,28 @@ public final class OptifinePack {
         return own;
     }
 
+    /**
+     * The 1.17.1 G9 payload was compiled against provisional SRG ids. The table maps them to the ids of the
+     * installed 1.17.1 runtime; it is opt-out through {@code -Doptiforge.renumber=off}.
+     */
+    private static SrgRemap loadSrgRenumber(StringBuilder notes) {
+        if (!"1.17.1".equals(mcVersion)) return null;
+        if ("off".equalsIgnoreCase(System.getProperty("optiforge.renumber", "auto").trim())) return null;
+        String resource = "/optiforge/mappings/1.17.1-srg-renumber.tsv";
+        try (InputStream in = OptifinePack.class.getResourceAsStream(resource)) {
+            if (in == null) return null;
+            SrgRemap table = SrgRemap.loadRenumber(in);
+            notes.append("SRG renumber table: ").append(resource).append(" (").append(table.size())
+                    .append(" entries)\n");
+            return table;
+        } catch (IOException e) {
+            notes.append("could not load ").append(resource).append(": ").append(e).append('\n');
+            return null;
+        }
+    }
     private static void writeCache(Path cacheRoot, String key, Map<String, byte[]> patched,
                                    Path optifineJar, SrgRemap remap, ObfNamespaceRemap obfRemap,
-                                   StringBuilder notes, java.util.Set<String> blocked) {
+                                   SrgRemap renumber, StringBuilder notes, java.util.Set<String> blocked) {
         try {
             Files.createDirectories(cacheRoot.resolve("patched"));
             for (Map.Entry<String, byte[]> entry : patched.entrySet()) {
@@ -1346,7 +1392,7 @@ public final class OptifinePack {
                 Files.createDirectories(target.getParent());
                 Files.write(target, entry.getValue());
             }
-            int own = writeOwnClasses(optifineJar, remap, obfRemap, cacheRoot.resolve("own"), notes, blocked);
+            int own = writeOwnClasses(optifineJar, remap, obfRemap, renumber, cacheRoot.resolve("own"), notes, blocked);
             J8.writeString(cacheRoot.resolve("manifest.txt"),
                     "optifine=" + optifineJar.getFileName() + "\n"
                             + "patched=" + patched.size() + "\n"
@@ -1357,10 +1403,10 @@ public final class OptifinePack {
     }
 
     private static Map<String, Path> writeOwnToTemp(Path optifineJar, SrgRemap remap,
-                                                    ObfNamespaceRemap obfRemap, StringBuilder notes,
-                                                    java.util.Set<String> blocked) throws IOException {
+                                                    ObfNamespaceRemap obfRemap, SrgRemap renumber,
+                                                    StringBuilder notes, java.util.Set<String> blocked) throws IOException {
         Path dir = Files.createTempDirectory("optiforge-own-");
-        writeOwnClasses(optifineJar, remap, obfRemap, dir, notes, blocked);
+        writeOwnClasses(optifineJar, remap, obfRemap, renumber, dir, notes, blocked);
         Map<String, Path> own = new LinkedHashMap<>();
         try (java.util.stream.Stream<Path> walk = Files.walk(dir)) {
             for (Path file : walk.filter(Files::isRegularFile).collect(java.util.stream.Collectors.toList())) {
@@ -1382,7 +1428,7 @@ public final class OptifinePack {
      * the latter are installer/tweaker code.
      */
     private static int writeOwnClasses(Path optifineJar, SrgRemap remap, ObfNamespaceRemap obfRemap,
-                                       Path targetDir, StringBuilder notes,
+                                       SrgRemap renumber, Path targetDir, StringBuilder notes,
                                        java.util.Set<String> blocked) throws IOException {
         int written = 0;
         int renamed = 0;
@@ -1401,6 +1447,16 @@ public final class OptifinePack {
                     bytes = obfRemap.remap(bytes);
                 } else if (remap != null) {
                     SrgRemap.Result result = remap.remap(bytes, blocked);
+                    renamed += result.renamed;
+                    bytes = result.bytes;
+                }
+                if (renumber != null) {
+                    // OptiFine's own classes are compiled against the same (provisional) SRG numbering as its
+                    // patched classes: measured on 1.17.1 HD_U_G9, net.optifine.CrashReporter calls
+                    // SystemReport.m_300462_(String,String) while the installed runtime has no such id, so the
+                    // crash report handler died on the first crash. Only the patched classes were renumbered
+                    // before, hence this second application.
+                    SrgRemap.Result result = renumber.remap(bytes);
                     renamed += result.renamed;
                     bytes = result.bytes;
                 }

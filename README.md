@@ -101,7 +101,8 @@ stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本�
 | 1.17 – 26.x | `OptiForge-<版本>.jar` | ModLauncher `ITransformationService` | 主产物（Java 17/21/25 运行时） |
 | 1.14.4 – 1.16.5 | `OptiForge-<版本>-oldml.jar` | 同一变换服务，编译成 Java 8 字节码 | 只依赖 ModLauncher 2–8 的旧 API 形态 |
 | 1.13.2 | 同上（`-oldml`） | 同上 + 混淆名→运行时名桥 | 该构建的补丁是扁平混淆布局，需要额外映射 |
-| ≤ 1.12.2 | `OptiForge-<版本>-legacy.jar` | Forge coremod（`FMLCorePlugin`） | launchwrapper 世界，用 `IClassTransformer` 交付补丁类 |
+| 1.8.9 – 1.12.2 | `OptiForge-<版本>-legacy.jar` | Forge coremod（`FMLCorePlugin`） | launchwrapper 世界，用 `IClassTransformer` 交付补丁类 |
+| ≤ 1.7.10 | `OptiForge-<版本>-legacy17.jar` | coremod，`cpw.mods.fml.relauncher` 绑定 | 1.7.10 的 FML 在 `cpw.mods.fml.*` 下 |
 
 旧版本线的实测（每条都是真机启动 + 进服务器世界，JRE 1.8.0_503）：
 
@@ -113,6 +114,10 @@ stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本�
 | 1.13.2 | 25.0.219 | `1.13.2 HD_U_G5` | 标题界面、0 崩溃（不 stage 资源载荷时 FML 会因缺纹理弹错误页，stage 则卡在 OptiFine 编译默认 CTM） |
 | 1.12.2 | 14.23.5.2860 | `1.12.2 HD_U_G5` | 启动 + 进世界、1669 条 `[OptiFine]`、0 崩溃 |
 | 1.8.9 | 11.15.1.2318 | `1.8.9 HD_U_M5` | 启动 + 进世界、3316 条 `[OptiFine]`、0 崩溃 |
+| 1.9.4 | 12.17.0.2317 | `1.9.4 HD_U_I5` | 启动 + 进世界、3314 条 `[OptiFine]`、0 崩溃 |
+| 1.10.2 | 12.18.3.2511 | `1.10.2 HD_U_I5` | 启动 + 进世界、3314 条 `[OptiFine]`、0 崩溃 |
+| 1.11.2 | 13.20.1.2505 | `1.11.2 HD_U_G5` | 启动 + 进世界、3315 条 `[OptiFine]`、0 崩溃 |
+| 1.7.10 | 10.13.0.1157 | `1.7.10 HD_U_E7` | 产物 `-legacy17` 已离线验证；1.7.10 rig 本身在 launchwrapper 阶段就 CME（无 mod 同样），真机待补 |
 
 注意：1.13–1.16 的运行时是**官方类名 + `func_`/`field_` 成员名**，1.12.2 是**混淆类名 + 混淆成员名**，
 两条管线因此分开；主产物的 Java 17 代码与它们共享同一套补丁/合并逻辑。

@@ -15,7 +15,9 @@ param(
     [string]$Jdk = 'C:\Program Files\Java\jdk-21',
     [string]$Jre8 = 'C:\Program Files\Java\jre1.8.0_503',
     [string]$ForgeHome = '',
-    [string]$Version = ''
+    [string]$Version = '',
+    [string]$Forge1710Jar = '',
+    [string]$Rig170 = 'I:\mods\optifineoforge-test'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -135,4 +137,61 @@ FMLCorePluginContainsFMLMod: false
 if ($LASTEXITCODE -ne 0) { throw "jar failed with exit code $LASTEXITCODE" }
 
 Write-Host ("built {0} ({1} bytes, Java 8 bytecode)" -f $out, (Get-Item $out).Length)
+
+# ---- second artifact: 1.7.10, where FML lives under cpw.mods.fml.* and the 1.8+ binding cannot load ----
+# Measured from the 1.7.10-10.13.0.1157 universal jar: 452 cpw/mods/fml entries and no
+# net/minecraftforge/fml package; its IFMLLoadingPlugin has the same five methods.
+$forge1710 = $Forge1710Jar
+if (-not $forge1710) {
+    $found = Get-ChildItem (Join-Path $Rig170 'libraries\net\minecraftforge\forge') -Recurse -File `
+        -Filter 'forge-1.7.10-*-universal.jar' -ErrorAction SilentlyContinue |
+        Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($found) { $forge1710 = $found.FullName }
+}
+if (-not $forge1710 -or -not (Test-Path $forge1710)) {
+    throw "Forge 1.7.10 universal jar not found (pass -Forge1710Jar or check $Rig170)"
+}
+
+$classes17 = Join-Path $root 'build\classes-legacy17'
+$stage17 = Join-Path $root 'build\classes-legacy17-jar'
+Remove-Item -Recurse -Force $classes17, $stage17 -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path $classes17, $stage17 | Out-Null
+$sources17 = @(Get-ChildItem (Join-Path $root 'src\legacy17\java') -Recurse -Filter '*.java' | ForEach-Object { $_.FullName })
+if (-not $sources17) { throw 'src\legacy17\java is empty' }
+
+Write-Host "javac --release 8 $($sources17.Count) 1.7.10 file(s) against cpw.mods.fml"
+$ErrorActionPreference = 'Continue'
+& $javac -encoding UTF-8 --release 8 -nowarn -Xlint:-options -cp "$classes;$forge1710" -d $classes17 @sources17
+$javacExit17 = $LASTEXITCODE
+$ErrorActionPreference = $previousPreference
+if ($javacExit17 -ne 0) { throw "javac failed for the 1.7.10 binding with exit code $javacExit17" }
+
+# Shared classes, minus the 1.8+ interface binding (that one links net.minecraftforge.fml and would only
+# be dead weight - or a load error - on 1.7.10).
+Get-ChildItem $classes -Recurse -File | Where-Object { $_.Name -notlike 'OptiForgeLegacyCorePlugin*' } |
+    ForEach-Object {
+        $rel = $_.FullName.Substring($classes.Length + 1)
+        $to = Join-Path $stage17 $rel
+        New-Item -ItemType Directory -Force -Path (Split-Path $to -Parent) | Out-Null
+        Copy-Item $_.FullName $to -Force
+    }
+Copy-Item (Join-Path $classes17 '*') $stage17 -Recurse -Force
+
+$out17 = Join-Path $libs "OptiForge-$Version-legacy17.jar"
+$manifest17 = Join-Path $root 'build\MANIFEST-legacy17.MF'
+$manifestText17 = @"
+Manifest-Version: 1.0
+Main-Class: kynarain.cn.optiforge.legacy.LegacyProbe
+Implementation-Title: OptiForge (legacy 1.7.10)
+Implementation-Version: $Version
+Implementation-Vendor: Kynarain
+FMLCorePlugin: kynarain.cn.optiforge.legacy.OptiForgeLegacy17CorePlugin
+FMLCorePluginContainsFMLMod: false
+
+"@
+[System.IO.File]::WriteAllText($manifest17, $manifestText17, (New-Object System.Text.ASCIIEncoding))
+& $jarTool --create --file $out17 --manifest $manifest17 -C $stage17 .
+if ($LASTEXITCODE -ne 0) { throw "jar failed with exit code $LASTEXITCODE" }
+
+Write-Host ("built {0} ({1} bytes, Java 8 bytecode, FMLCorePlugin 1.7.10)" -f $out17, (Get-Item $out17).Length)
 exit 0

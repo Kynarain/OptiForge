@@ -33,7 +33,17 @@ public final class LegacyResourceLocator {
     public static void install(Path stagedJar) {
         try {
             ClassLoader loader = LegacyResourceLocator.class.getClassLoader();
-            Class<?> locatorClass = Class.forName("optifine.OptiFineResourceLocator", true, loader);
+            Class<?> locatorClass;
+            try {
+                locatorClass = Class.forName("optifine.OptiFineResourceLocator", true, loader);
+            } catch (Throwable absent) {
+                // Measured: the 1.7.10 build (HD_U_E7) has no resource-locator contract at all - its own
+                // classes read assets with Class.getResourceAsStream, so the staged jar is enough. The
+                // 1.8+ builds have the contract and need it installed.
+                System.out.println(TAG + " this OptiFine build has no resource locator;"
+                        + " own classes read assets from the staged jar through the class loader");
+                return;
+            }
             Class<?> contract = Class.forName("optifine.IOptiFineResourceLocator", true, loader);
             Object proxy = Proxy.newProxyInstance(loader, new Class<?>[]{contract}, new Handler(stagedJar));
             locatorClass.getMethod("setResourceLocator", contract).invoke(null, proxy);

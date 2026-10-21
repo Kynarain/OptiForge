@@ -333,11 +333,20 @@ public final class LegacyPayload implements AutoCloseable {
     }
 
     public byte[] readEntry(String name) throws IOException {
+        byte[] bytes = readEntryOrNull(name);
+        if (bytes == null) {
+            throw new IOException("no entry " + name + " in " + jar);
+        }
+        return bytes;
+    }
+
+    /** Like {@link #readEntry} but returns {@code null} for an absent entry (e.g. buildof.txt). */
+    public byte[] readEntryOrNull(String name) throws IOException {
         ZipFile zip = new ZipFile(jar.toFile());
         try {
             ZipEntry entry = zip.getEntry(name);
             if (entry == null) {
-                throw new IOException("no entry " + name + " in " + jar);
+                return null;
             }
             InputStream in = zip.getInputStream(entry);
             try {

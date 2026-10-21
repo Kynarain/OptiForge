@@ -1375,3 +1375,18 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
 因此阶段 2 的可验证结论是：**四条线（1.13.2 / 1.14.4 / 1.15.2 / 1.16.5）都能在 Java 8 上启动并接管 OptiFine，
 0 崩溃**；其中 1.14.4 与 1.15.2 进服务器世界成功，1.16.5 与 1.13.2 因 rig 环境限制无法复现自动连接，
 但对照实验排除了 OptiForge 的嫌疑。
+
+### 0.16.0：更老版本线（1.7.10–1.11.2）、`assets` 默认改 staged、G9 重编号结论
+
+- **1.9.4 / 1.10.2 / 1.11.2 真机通过**：都是启动 + 进服务器世界（`serverSawJoin=2`）、3314–3315 条 `[OptiFine]`、
+  0 崩溃，用的还是同一个 `-legacy.jar`（1.8.9 起就无需改动）。
+- **1.7.10 单独产物**：它的 FML 在 `cpw.mods.fml.*`（`net/minecraftforge/fml` 一个类都没有），所以插件类必须实现
+  `cpw.mods.fml.relauncher.IFMLLoadingPlugin`，另出 `OptiForge-<v>-legacy17.jar`；离线 probe 全绿
+  （87 补丁 / md5 87 OK / 225 自有类 / drift 13）。真机没跑通是 rig 自身的 Forge 1.7.10 profile 在 launchwrapper
+  阶段就 `ConcurrentModificationException`（**清空 mods 一样崩**），不是 OptiForge。
+- **`-Doptiforge.assets` 默认改为 `staged`**：不再默认缺 CTM 纹理；`none` 作为慢机器/不用 CTM 的回退。
+- **1.17.1 `HD_U_G9` 的新结论**：新增 `ObfNamespaceRemap` 式的 SRG 重编号表
+  （`data/mappings/1.17.1-srg-renumber.tsv`，332 行，默认启用，H1 会自动跳过），G9 现在能加载 OptiFine、
+  通过 CrashReport 路径（`m_300462_ → m_143519_`），但最后仍死在
+  `SurfaceBuilder.<clinit>`：`NullPointerException: Material.m_76339_()`。这说明 G9 是对**发布前**的 1.17.1
+  源码打的补丁（行为差异，不只是编号），重编号救不回来 —— 保持"G9 不支持、用 H1"的结论。
