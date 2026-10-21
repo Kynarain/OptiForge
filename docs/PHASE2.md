@@ -725,3 +725,45 @@ final class net.optifine.util.TextureUtils$1 implements net.minecraft.resources.
 
 and the method body calls `net.optifine.util.TextureUtils.resourcesReloaded(IResourceManager)V`. Pack numbers
 are unchanged: 233 patched classes, 455 own classes, 815 payload assets, AT re-applied to 16 classes.
+### 6.10 Asset payloads are opt-in (reload-stall analysis) and 1.13.2 handshake facts
+
+Join test on 1.16.5: with the 1621 payload assets staged, the client entered "Reloading custom textures" and did
+not finish a reload in 245 s. Measurements:
+
+- The staged asset tree is **byte-identical** to the official mod-form jar found on this machine
+  (`OptiFine-1.16.5_HD_U_G8.jar`, 1732 assets incl. 1611 CTM PNGs): compared all 1732 files, 0 missing, 0 extra,
+  0 content differences. So the files and layout are right.
+- Jar read path is not the cost (probe `build/phase2/AssetReadProbe.java` on the staged jar): reading every
+  `assets/**` entry sequentially (1732 files, 1 666 620 bytes) = **31 ms**; reopening the jar and doing a random
+  lookup + full read of all 1621 payload assets = **17 ms**.
+- Asset materialisation is cached per pack key: first launch 3 s (1621 xdelta applications + 1621 writes +
+  jar deflate), later launches 1 s with no xdelta work.
+- Therefore the stall is OptiFine actually **compiling/stitching the default CTM set** now that the PNGs exist
+  (with missing textures it did no work). It is not extraction, not packing, and not jar I/O.
+
+Change: `-Doptiforge.assets=none|staged` (default **none**). `none` = previous behaviour (plain `assets/**` only,
+no `patch/assets` materialisation, no payload files in the jar). `staged` reproduces the full official asset
+tree. Default is `none` until the CTM cost is understood on the target machine; flipping the default is a
+one-line change. Staged mod jar = 2 111 784 bytes, plain = 1 506 525 bytes (1.16.5).
+
+1.16.5 reload completion is proven by the vanilla atlas lines that come after the OptiFine reload messages, e.g.
+
+```
+[Render thread/INFO] [net.minecraft.client.Minecraft/]: Created: 256x256x4 minecraft:textures/atlas/blocks.png-atlas
+```
+
+followed by `Sound engine started` and the title screen.
+
+**1.13.2 handshake.** Disassembled Forge 25.0.219: the FML handshake compares **network channels only**
+(`NetworkRegistry.validateServerChannels` on the server, `validateClientChannels` on the client); the mod list is
+logged but never compared (`handleClientModListOnServer` -> "Accepted client connection mod list"). Our generated
+`@Mod` registers no channels, so the staged javafml jar cannot cause the 30 s `lost connection: Disconnected`.
+`FMLModType: LIBRARY` does exist in 1.13.2 (`ModFile$Type{MOD,LIBRARY,LANGPROVIDER}`) but `ModDiscoverer`
+only feeds `MOD` and `LANGPROVIDER` into `LoadingModList`; the `LIBRARY` group is dropped, and 1.13.2 has no
+classpath hook for library jars - so that attribute alone would hide the staged classes. A no-mod-list delivery
+route that does work on 1.13.2 is a transformer-discovery jar: `ModDirTransformerDiscoverer` adds every
+`mods/*.jar` carrying `META-INF/services/cpw.mods.modlauncher.api.ITransformationService` to the early
+classpath (this is how the oldml artifact itself is discovered), at the cost of not mounting its `assets/` as a
+resource pack. The 30 s disconnect is equally consistent with the client being stuck in the slow CTM
+reload/connect window, so test `-Doptiforge.assets=none` first; the architecture change is only worth doing if
+the disconnect reproduces with assets disabled.

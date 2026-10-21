@@ -1339,3 +1339,15 @@ SRG 编号），不是打补丁逻辑的问题——同代的 `H1` 就正常。�
 光影实测见 [docs/SHADERS.md](SHADERS.md)：Modrinth 三个高下载量包（Complementary Reimagined 72.2M、
 BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别编译 27/26/25 个 GL program、
 0 错误、0 崩溃；1.21.7 的 OptiFine 构建自身会跳过 shaderpack（`Shaders.loadShaderPack` 里无条件 `ifne`）。
+
+### 0.15.1：旧版本线的资源策略与回归
+
+- `-Doptiforge.assets=none|staged`（默认 `none`）：`staged` 才把 `patch/assets/**.xdelta` 解成真正的纹理
+  并 stage。1.13–1.16 上 `staged` 会让 OptiFine 首次编译默认 CTM（实测 1.16.5 约 245 s），`none` 回到
+  "缺纹理警告但不卡"的旧行为。另：`staged` 产物与官方 mod 形态的 OptiFine jar 逐字节一致（1732/1732 文件）。
+- 1.16.5 真机：默认设置下资源重载正常完成，3319 条 `[OptiFine]`、0 崩溃；rig 上 `--server` 未触发自动连接，
+  进世界待补测。
+- 1.13.2 真机：启动到标题界面、0 崩溃；`assets=none` 时 FML 会因缺纹理弹错误页并断开，`staged` 时卡在
+  OptiFine 编译默认 CTM，两条路都还没进世界。
+- 1.13.2 的握手不是"服务器缺 mod"的问题：Forge 25 的握手只比较网络通道（`NetworkRegistry.validateServerChannels`），
+  我们生成的 `@Mod` 不注册通道，所以 mod 列表不影响连接。

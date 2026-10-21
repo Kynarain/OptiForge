@@ -963,8 +963,24 @@ public final class OptifinePack {
      * "Using missing texture: ... optifine/ctm/default/10_glass_purple/44.png". The vanilla assets live in
      * {@code client-<mc>-<timestamp>-extra.jar}, which the launcher supplies through the library root.
      */
+    /**
+     * Whether OptiFine's {@code patch/assets/**} payloads are materialised and staged.
+     *
+     * <p>Measured on the Lead's rig: with the payload assets present, OptiFine actually compiles the
+     * default CTM set (1685 textures) during "Reloading custom textures" and the 1.16.5 client did not
+     * finish a reload inside 245 s; without them (missing textures) the reload is quick. The staged asset
+     * tree is byte-identical to the official {@code OptiFine-1.16.5_HD_U_G8.jar} mod jar (1732/1732 files,
+     * zero different), so this is OptiFine's CTM work in this environment, not jar layout. The payloads are
+     * therefore opt-in: {@code -Doptiforge.assets=staged} restores them, the default keeps loading cheap.
+     */
+    static boolean stagedAssetsEnabled() {
+        String mode = System.getProperty("optiforge.assets", "none").trim().toLowerCase(java.util.Locale.ROOT);
+        return mode.equals("staged") || mode.equals("all") || mode.equals("true");
+    }
+
     private static void ensureAssetPayloads(Path gameDir, Path cacheRoot, Path optifineJar,
                                             StringBuilder notes) {
+        if (!stagedAssetsEnabled()) return;
         if (gameDir == null || cacheRoot == null) return;
         Path dir = cacheRoot.resolve("assets");
         Path marker = dir.resolve("payload-count.txt");
@@ -1016,7 +1032,12 @@ public final class OptifinePack {
 
     private static void writeLibraryMod(Path gameDir, String key, Map<String, Path> own,
                                         Path optifineJar, Path cacheRoot, StringBuilder notes) throws IOException {
-        ensureAssetPayloads(gameDir, cacheRoot, optifineJar, notes);
+        boolean stagePayloads = stagedAssetsEnabled();
+        if (stagePayloads) {
+            ensureAssetPayloads(gameDir, cacheRoot, optifineJar, notes);
+        } else {
+            notes.append("OptiFine asset payloads: disabled (-Doptiforge.assets=none); plain assets/ only\n");
+        }
         Path mods = gameDir.resolve("mods");
         Files.createDirectories(mods);
         Path target = mods.resolve(stagedJarName());
@@ -1070,9 +1091,6 @@ public final class OptifinePack {
                     stagedClasses++;
                 }
             }
-            if (cacheRoot != null) {
-                ensureAssetPayloads(gameDir, cacheRoot, optifineJar, notes);
-            }
             int resources = 0;
             java.util.Set<String> stagedResources = new java.util.HashSet<>();
             try (ZipFile source = new ZipFile(optifineJar.toFile())) {
@@ -1093,7 +1111,7 @@ public final class OptifinePack {
             // materialised into the pack cache above; stage every file that the jar root does not already
             // carry (the root copies are the plain files, the payload ones are the patched results).
             int payloadAssets = 0;
-            Path payloadDir = cacheRoot == null ? null : cacheRoot.resolve("assets");
+            Path payloadDir = stagePayloads && cacheRoot != null ? cacheRoot.resolve("assets") : null;
             if (payloadDir != null && Files.isDirectory(payloadDir)) {
                 try (java.util.stream.Stream<Path> walk = Files.walk(payloadDir)) {
                     for (Path file : walk.filter(Files::isRegularFile)

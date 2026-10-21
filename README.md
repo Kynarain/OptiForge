@@ -86,7 +86,10 @@ stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本�
 - `OptiForge-<版本>.jar` → 放进 `mods/`，这是 OptiForge 本体（变换服务，不出现在 mod 列表）；
 - `OptiForge-<版本>-classes.jar` → 自动生成在 `mods/`，是 mod 列表里那个 **OptiForge**（modId `optiforge`，
   协议 MPL 2.0）；缺 OptiFine 时它只带提示、不带 OptiFine 类；
-- OptiFine 自身的 jar 保持官方文件名，放在 `optiforge/`。'
+- OptiFine 自身的 jar 保持官方文件名，放在 `optiforge/`。
+
+旧版本线额外可选：`-Doptiforge.assets=staged` 会把 OptiFine 的 `patch/assets` 纹理载荷解出来一起 stage
+（视觉最完整，但 1.13–1.16 上首次会花时间编译默认 CTM）；默认 `none`，只带普通 `assets/**`。'
 
 ## 旧版本线：1.13–1.16.5 与 1.12.2 及更早
 
@@ -107,7 +110,7 @@ stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本�
 | 1.16.5 | 36.2.39 | `1.16.5 HD_U_G8` | 标题界面、`[OptiFine]` 日志正常 |
 | 1.15.2 | 31.2.57 | `1.15.2 HD_U_G6` | 启动 + 进世界、0 崩溃 |
 | 1.14.4 | 28.2.26 | `1.14.4 HD_U_G5` | 启动 + 进世界、0 崩溃 |
-| 1.13.2 | 25.0.219 | `1.13.2 HD_U_G5` | 标题界面、0 崩溃（连接需服务器也装 OptiForge：该线 FML 没有 `displayTest`） |
+| 1.13.2 | 25.0.219 | `1.13.2 HD_U_G5` | 标题界面、0 崩溃（不 stage 资源载荷时 FML 会因缺纹理弹错误页，stage 则卡在 OptiFine 编译默认 CTM） |
 | 1.12.2 | 14.23.5.2860 | `1.12.2 HD_U_G5` | 启动 + 进世界、1669 条 `[OptiFine]`、0 崩溃 |
 
 注意：1.13–1.16 的运行时是**官方类名 + `func_`/`field_` 成员名**，1.12.2 是**混淆类名 + 混淆成员名**，
