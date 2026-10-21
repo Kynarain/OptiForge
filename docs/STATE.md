@@ -1390,3 +1390,14 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
   通过 CrashReport 路径（`m_300462_ → m_143519_`），但最后仍死在
   `SurfaceBuilder.<clinit>`：`NullPointerException: Material.m_76339_()`。这说明 G9 是对**发布前**的 1.17.1
   源码打的补丁（行为差异，不只是编号），重编号救不回来 —— 保持"G9 不支持、用 H1"的结论。
+
+### 0.16.1：修 1.17–1.19 的 AT 回归
+
+- 现象：1.17.1 + H1 启动即崩 `IllegalAccessError: ForgeRenderTypes$CustomizableTextureState -> RenderStateShard.f_110131_ (private)`。
+- 根因：AT 配置**不在模块路径带的那个 jar 里**。1.17.1-37.0.103 的模块路径是
+  `forge-1.17.1-37.0.103-client.jar`，而 `META-INF/accesstransformer.cfg` 只在同目录的
+  `forge-1.17.1-37.0.103-universal.jar` 里；"只读本线配置"的改动因此读到了 0 个文件。
+- 修法：AT 候选集合把**每个启动 jar 的同目录 jar** 也加进来（`.getParent()` 扫描），
+  并在 rig 这类非标准布局下用 `-Doptiforge.libraries=<libraries>` 兜底。
+- 验证：1.17.1 + H1 重新 480 条授权 / 37 个类重放 AT、0 崩溃；
+  `-Doptiforge.assets` 默认 staged 下 1.15.2 也正常（1621 个载荷资产、atlas 完成、0 崩溃）。

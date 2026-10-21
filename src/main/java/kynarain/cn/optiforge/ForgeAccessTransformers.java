@@ -92,6 +92,23 @@ public final class ForgeAccessTransformers {
         int lines = 0;
         java.util.LinkedHashSet<Path> candidates = new java.util.LinkedHashSet<>(
                 LaunchPaths.runtimeJars(gameDir, mcVersion, forgeVersion));
+        // Forge's access transformer config does not live in the jar the module path carries: on
+        // 1.17.1-37.0.103 the module path has forge-1.17.1-37.0.103-client.jar while
+        // META-INF/accesstransformer.cfg only exists in the sibling forge-1.17.1-37.0.103-universal.jar.
+        // Measured symptom of missing this: "access transformers: 0 grant(s)" and then
+        // IllegalAccessError: ForgeRenderTypes$CustomizableTextureState -> RenderStateShard.f_110131_
+        // (private) on the first font render. So every jar next to a launch jar is a candidate too.
+        for (Path launchJar : new java.util.ArrayList<>(candidates)) {
+            Path dir = launchJar.getParent();
+            if (dir == null || !Files.isDirectory(dir)) continue;
+            try (java.nio.file.DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.jar")) {
+                for (Path sibling : stream) {
+                    if (!candidates.contains(sibling)) candidates.add(sibling);
+                }
+            } catch (IOException ignored) {
+                // keep what the launch list gave us
+            }
+        }
         if (gameDir != null) {
             Path mods = gameDir.resolve("mods");
             if (Files.isDirectory(mods)) {
