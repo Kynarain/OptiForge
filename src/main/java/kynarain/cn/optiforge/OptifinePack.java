@@ -164,14 +164,31 @@ public final class OptifinePack {
                 try (InputStream in = zip.getInputStream(crashReport)) {
                     bytes = in.readAllBytes();
                 }
-                String text = new String(bytes, StandardCharsets.UTF_8);
-                if (text.contains("forThrowable")) {
-                    notes.append("runtime namespace: official names (").append(p.getFileName()).append(")\n");
-                    return Namespace.OFFICIAL;
+                // Judge by this class's own *members*, not by the raw bytes: 1.19.4 keeps parameter names such
+                // as "forThrowable" in its local variable table, which made a byte scan claim official names
+                // and switch on a remap that must not run there (Forge 1.17-1.19.4 use official class names
+                // with SRG member names, which is exactly what OptiFine's patch/srg payload produces).
+                org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
+                new org.objectweb.asm.ClassReader(bytes).accept(node, 0);
+                int srgMembers = 0;
+                int plainMembers = 0;
+                for (org.objectweb.asm.tree.MethodNode method : node.methods) {
+                    if (!method.name.startsWith("<") && SRG.matcher(method.name).find()) srgMembers++;
+                    else if (!method.name.startsWith("<")) plainMembers++;
                 }
-                if (SRG.matcher(text).find()) {
-                    notes.append("runtime namespace: SRG names (").append(p.getFileName()).append(")\n");
+                for (org.objectweb.asm.tree.FieldNode field : node.fields) {
+                    if (SRG.matcher(field.name).find()) srgMembers++;
+                    else plainMembers++;
+                }
+                if (srgMembers > plainMembers) {
+                    notes.append("runtime namespace: SRG names (").append(p.getFileName()).append(", ")
+                            .append(srgMembers).append(" srg / ").append(plainMembers).append(" plain)\n");
                     return Namespace.SRG;
+                }
+                if (plainMembers > 0) {
+                    notes.append("runtime namespace: official names (").append(p.getFileName()).append(", ")
+                            .append(plainMembers).append(" plain / ").append(srgMembers).append(" srg)\n");
+                    return Namespace.OFFICIAL;
                 }
             } catch (IOException ignored) {
                 // not a readable jar; try the next one
@@ -621,7 +638,7 @@ public final class OptifinePack {
                 + "[[dependencies.optiforge]]\n"
                 + "modId=\"minecraft\"\n"
                 + "mandatory=true\n"
-                + "versionRange=\"[1.20.1,)\"\n"
+                + "versionRange=\"[1.17,)\"\n"
                 + "ordering=\"NONE\"\n"
                 + "side=\"BOTH\"\n";
     }
@@ -847,7 +864,7 @@ public final class OptifinePack {
         };
     }
 
-    private static final String PACK_VERSION = "v5";
+    private static final String PACK_VERSION = "v6";
 
     private static String key(Path optifineJar, Path baseJar) {
         String a = hashFile(optifineJar, 16);

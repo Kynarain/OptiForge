@@ -594,6 +594,43 @@ Mods 界面此前只显示名称/版本/ModId/协议，缺作者与链接。现�
 `credits` 从"OptiFine by sp614x. OptiFabric (Chocohead) for the Fabric-side approach."缩短为
 `"OptiFine by sp614x"`——mods 界面里 Credits 只写真正的上游依赖；OptiFabric 的参考关系保留在 README 的
 Credits 一行里。
+### 0.13.0：阶段 1 —— 1.17–1.19.4 支持
+
+目标是把 1.17/1.18/1.19 这几代补齐（Java 17、Forge 37–45、ModLauncher 9/10）。实测已通过 5 条线：
+
+| MC | Forge | OptiFine | 官方 Forge 列 | 结果 |
+|---|---|---|---|---|
+| 1.17.1 | 37.0.103 | `1.17.1 HD_U_H1` | 兼容 | 服务器端 `Dev joined the game`、79 条 `[OptiFine]`、0 崩溃 |
+| 1.18.2 | 40.2.9 | `1.18.2 HD_U_H9` | 兼容 | 同上（81 条） |
+| 1.19.2 | 43.2.14 | `1.19.2 HD_U_I2` | 兼容 | 同上（80 条） |
+| 1.19.3 | 44.0.49 | `1.19.3 HD_U_I2_pre4` | **N/A** | 同上（106 条） |
+| 1.19.4 | 45.1.0 | `1.19.4 HD_U_I4` | 兼容 | 同上（104 条） |
+
+改动（四处都在"运行时判定"上，不是补丁逻辑）：
+
+1. **命名空间判定改成按成员名**：原来在 `CrashReport.class` 原始字节里找 `forThrowable`，但 1.19.4 的
+   局部变量表里就有这个参数名，于是被判成 official 并错误启用了重映射（用 1.21 的表）。改为用 ASM 读
+   类自身的成员：`m_`/`f_` 占多 → SRG，普通名占多 → official。1.17–1.19.4 因此正确判为 **SRG**、
+   重映射关闭（这几代的运行时就是"官方类名 + SRG 成员名"）。
+2. **JDK 选择按 profile 的 `javaVersion`**：之前按 MC 版本猜，把 1.20.6（Forge 50 需要 Java 21）
+   给了 Java 17，启动即 `UnsupportedClassVersionError: class file version 65.0`。现在读
+   profile（或 parent）的 `javaVersion.majorVersion`：17 / 21 / 25。
+3. **natives 按版本目录**：`launch.ps1` 改成每个版本一个 `natives-<version>` 目录，并从 **classpath 上
+   真正解析出的 LWJGL 版本**解压 DLL（1.18.2 的 profile 写 3.2.1，但 classpath 去重后是 3.2.2）。
+   原先共用 `natives/` 会 `[LWJGL] Incompatible Java and native library versions` 或
+   `Failed to load a library`。
+4. **`mods.toml` 的 minecraft 依赖放宽到 `[1.17,)`**：原来 `[1.20.1,)` 直接把 1.19.4 拦在
+   "Missing or unsupported mandatory dependencies"。
+
+配套工具：
+- `tools/legacy-rig-test.ps1`：自动装 Forge 客户端+服务端、补原版 jar/库/natives、生成世界、
+  用 `--server/--port` 连服，输出 `joined / serverSawJoin / crashes / optifineLines`；
+- `tools/full-sweep.ps1`：把 12 条 quickPlay 线（1.20.1、1.20.6、1.21–1.21.11、26.1.2、26.2）
+  逐条跑一遍并汇总。
+
+本轮全量回归（pack v6）结果：1.20.6、1.21、1.21.1、1.21.6–1.21.11、26.1.2、26.2 共 11 条
+`joined=True`、0 崩溃；1.20.1 仍只有启动验证（Forge 47 不响应 quickPlay，也没有 1.17–1.19 那样的
+`--server`）。
 ## 下一步（模块可见性）
 
 1. 既然不能改 mod jar 的模块性，就**改引用**：给 OptiFine 自有类做一遍"非强制引用"处理——把
@@ -1095,6 +1132,43 @@ Mods 界面此前只显示名称/版本/ModId/协议，缺作者与链接。现�
 `credits` 从"OptiFine by sp614x. OptiFabric (Chocohead) for the Fabric-side approach."缩短为
 `"OptiFine by sp614x"`——mods 界面里 Credits 只写真正的上游依赖；OptiFabric 的参考关系保留在 README 的
 Credits 一行里。
+### 0.13.0：阶段 1 —— 1.17–1.19.4 支持
+
+目标是把 1.17/1.18/1.19 这几代补齐（Java 17、Forge 37–45、ModLauncher 9/10）。实测已通过 5 条线：
+
+| MC | Forge | OptiFine | 官方 Forge 列 | 结果 |
+|---|---|---|---|---|
+| 1.17.1 | 37.0.103 | `1.17.1 HD_U_H1` | 兼容 | 服务器端 `Dev joined the game`、79 条 `[OptiFine]`、0 崩溃 |
+| 1.18.2 | 40.2.9 | `1.18.2 HD_U_H9` | 兼容 | 同上（81 条） |
+| 1.19.2 | 43.2.14 | `1.19.2 HD_U_I2` | 兼容 | 同上（80 条） |
+| 1.19.3 | 44.0.49 | `1.19.3 HD_U_I2_pre4` | **N/A** | 同上（106 条） |
+| 1.19.4 | 45.1.0 | `1.19.4 HD_U_I4` | 兼容 | 同上（104 条） |
+
+改动（四处都在"运行时判定"上，不是补丁逻辑）：
+
+1. **命名空间判定改成按成员名**：原来在 `CrashReport.class` 原始字节里找 `forThrowable`，但 1.19.4 的
+   局部变量表里就有这个参数名，于是被判成 official 并错误启用了重映射（用 1.21 的表）。改为用 ASM 读
+   类自身的成员：`m_`/`f_` 占多 → SRG，普通名占多 → official。1.17–1.19.4 因此正确判为 **SRG**、
+   重映射关闭（这几代的运行时就是"官方类名 + SRG 成员名"）。
+2. **JDK 选择按 profile 的 `javaVersion`**：之前按 MC 版本猜，把 1.20.6（Forge 50 需要 Java 21）
+   给了 Java 17，启动即 `UnsupportedClassVersionError: class file version 65.0`。现在读
+   profile（或 parent）的 `javaVersion.majorVersion`：17 / 21 / 25。
+3. **natives 按版本目录**：`launch.ps1` 改成每个版本一个 `natives-<version>` 目录，并从 **classpath 上
+   真正解析出的 LWJGL 版本**解压 DLL（1.18.2 的 profile 写 3.2.1，但 classpath 去重后是 3.2.2）。
+   原先共用 `natives/` 会 `[LWJGL] Incompatible Java and native library versions` 或
+   `Failed to load a library`。
+4. **`mods.toml` 的 minecraft 依赖放宽到 `[1.17,)`**：原来 `[1.20.1,)` 直接把 1.19.4 拦在
+   "Missing or unsupported mandatory dependencies"。
+
+配套工具：
+- `tools/legacy-rig-test.ps1`：自动装 Forge 客户端+服务端、补原版 jar/库/natives、生成世界、
+  用 `--server/--port` 连服，输出 `joined / serverSawJoin / crashes / optifineLines`；
+- `tools/full-sweep.ps1`：把 12 条 quickPlay 线（1.20.1、1.20.6、1.21–1.21.11、26.1.2、26.2）
+  逐条跑一遍并汇总。
+
+本轮全量回归（pack v6）结果：1.20.6、1.21、1.21.1、1.21.6–1.21.11、26.1.2、26.2 共 11 条
+`joined=True`、0 崩溃；1.20.1 仍只有启动验证（Forge 47 不响应 quickPlay，也没有 1.17–1.19 那样的
+`--server`）。
 ## 下一步
 
 1. **修模块可见性**（两条线的共同根因）：给 staged mod 生成 `module-info.class` 或用
