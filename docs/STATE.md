@@ -1351,3 +1351,14 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
   OptiFine 编译默认 CTM，两条路都还没进世界。
 - 1.13.2 的握手不是"服务器缺 mod"的问题：Forge 25 的握手只比较网络通道（`NetworkRegistry.validateServerChannels`），
   我们生成的 `@Mod` 不注册通道，所以 mod 列表不影响连接。
+
+### 0.15.2：阶段 3 再往下（1.8.9）与阶段 2 收尾记录
+
+- **1.8.9 / Forge 11.15.1.2318 / OptiFine `1.8.9 HD_U_M5`**：启动 + 进服务器世界，3316 条 `[OptiFine]`、
+  0 崩溃。它的 OptiFine 负载和 1.12.2 同一形态（扁平 `patch/*.class.xdelta` 218 个 + jar 根 `Config.class`
+  + `net/optifine/**` 408），所以同一个 coremod 产物直接可用；rig 侧只要把 Forge 1.8.9 的客户端库补齐
+  （`asm-all 5.0.3`、`lzma 0.0.1`、`trove4j 3.0.3`、`vecmath 1.5.2`、`log4j 2.0-beta9`、**guava 18.0**——
+  guava 21 会缺 `Objects.firstNonNull`）。
+- 1.9x–1.11x 未测，但形态与 1.8.9/1.12.2 相同，预期同一产物可用。
+- 阶段 2 的两处未闭环：1.16.5 在 rig 上 `--server` 未触发自动连接（启动与 OptiFine 均正常）；
+  1.13.2 连服务器时停在 Connecting（客户端 30 s 后被服务端记录为 Disconnected），启动与 OptiFine 正常。
