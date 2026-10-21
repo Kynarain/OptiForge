@@ -44,17 +44,46 @@ Add-Type -AssemblyName System.IO.Compression.FileSystem
 if (-not (Test-Path $jar) -or -not (Test-Zip $jar)) {
     $url = "https://bmclapi2.bangbang93.com/optifine/$Minecraft/$Edition/$Optifine"
     Write-Host "download $url"
-    & curl.exe -sL --max-time 300 -o $jar $url
+    # The mirror occasionally answers with a 9-byte stub; retry before giving up (measured on 1.17 pre26).
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        & curl.exe -sL --max-time 300 -o $jar $url
+        if (Test-Zip $jar) { break }
+        Write-Host "  attempt $attempt failed, retrying"
+        Remove-Item $jar -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 3
+    }
     if (-not (Test-Zip $jar)) {
-        # release builds live one level deeper than previews: /<mc>/<edition>/<version> is the only form
+        # The mirror answers some builds with a 163-byte stub; optifine.net still serves them through
+        # adloadx -> downloadx with a one-time token.
+        $names = @("OptiFine_${Minecraft}_$Edition`_$Optifine.jar", "preview_OptiFine_${Minecraft}_$Edition`_$Optifine.jar")
+        foreach ($name in $names) {
+            $adUrl = "https://optifine.net/adloadx?f=$name"
+            $html = & curl.exe -sL --max-time 90 $adUrl
+            $token = ($html | Select-String -Pattern 'downloadx\?f=[^"'']+' -AllMatches).Matches | Select-Object -First 1
+            if (-not $token) { continue }
+            $target = "https://optifine.net/$($token.Value)"
+            Write-Host "  official fallback: $target"
+            & curl.exe -sL --max-time 300 -e $adUrl -o $jar $target
+            if (Test-Zip $jar) { break }
+        }
+    }
+    if (-not (Test-Zip $jar)) {
         throw "OptiFine download failed for $Minecraft $Edition $Optifine"
     }
 }
 Write-Host "OptiFine: $((Get-Item $jar).Length) bytes"
 
 # ---- Forge client install into a self-contained scratch profile ----
-if (-not (Test-Path $installer)) {
-    & curl.exe -sL --max-time 300 -o $installer "https://maven.minecraftforge.net/net/minecraftforge/forge/$tag/forge-$tag-installer.jar"
+if (-not (Test-Path $installer) -or -not (Test-Zip $installer)) {
+    # A truncated installer fails later as "Invalid or corrupt jarfile", so validate before using it.
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
+        & curl.exe -sL --max-time 300 -o $installer "https://maven.minecraftforge.net/net/minecraftforge/forge/$tag/forge-$tag-installer.jar"
+        if (Test-Zip $installer) { break }
+        Write-Host "  installer attempt $attempt failed, retrying"
+        Remove-Item $installer -Force -ErrorAction SilentlyContinue
+        Start-Sleep -Seconds 3
+    }
+    if (-not (Test-Zip $installer)) { throw "Forge installer download failed for $tag" }
 }
 
 $manifest = (& curl.exe -sL --max-time 120 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json') | ConvertFrom-Json
@@ -169,7 +198,7 @@ $optifine = ($log | Select-String -Pattern '\[OptiFine\]' | Measure-Object).Coun
 $serverLog = Get-Content (Join-Path $serverDir 'server-run.log') -ErrorAction SilentlyContinue
 $serverJoined = [bool]($serverLog | Select-String -Pattern 'joined the game')
 
-Write-Host ("RESULT {0} + Forge {1} + OptiFine {2}: joined={3} serverSawJoin={4} crashes={5} optifineLines={6}" -f `
+Write-Output ("RESULT {0} + Forge {1} + OptiFine {2}: joined={3} serverSawJoin={4} crashes={5} optifineLines={6}" -f `
         $Minecraft, $Forge, $Optifine, $joined, $serverJoined, $crashes, $optifine)
 
 Stop-Job $serverJob -ErrorAction SilentlyContinue
