@@ -42,8 +42,8 @@ public final class PatchPlan {
     private PatchPlan(Kind kind, List<String> lines, List<String> forgePatchTargets,
                       int srgForgeClasses, int notchForgeClasses) {
         this.kind = kind;
-        this.lines = List.copyOf(lines);
-        this.forgePatchTargets = List.copyOf(forgePatchTargets);
+        this.lines = J8.copyOf(lines);
+        this.forgePatchTargets = J8.copyOf(forgePatchTargets);
         this.srgForgeClasses = srgForgeClasses;
         this.notchForgeClasses = notchForgeClasses;
     }
@@ -102,11 +102,15 @@ public final class PatchPlan {
     }
 
     public String verdict() {
-        return switch (kind) {
-            case OK -> "OK: build states Forge compatibility with the running version";
-            case DECLARED_INCOMPATIBLE -> "INCOMPATIBLE: OptiFine states no Forge support for this build";
-            case FORGE_MISMATCH -> "MISMATCH: build was pinned to a different Forge version";
-            case UNKNOWN -> "UNKNOWN: no matrix row for this build";
-        };
+        switch (kind) {
+            case OK:
+                return "OK: build states Forge compatibility with the running version";
+            case DECLARED_INCOMPATIBLE:
+                return "INCOMPATIBLE: OptiFine states no Forge support for this build";
+            case FORGE_MISMATCH:
+                return "MISMATCH: build was pinned to a different Forge version";
+            default:
+                return "UNKNOWN: no matrix row for this build";
+        }
     }
 }

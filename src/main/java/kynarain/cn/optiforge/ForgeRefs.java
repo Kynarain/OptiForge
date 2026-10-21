@@ -90,7 +90,7 @@ public final class ForgeRefs {
                 scanned++;
                 byte[] bytes;
                 try (InputStream in = zip.getInputStream(e)) {
-                    bytes = in.readAllBytes();
+                    bytes = J8.readAll(in);
                 } catch (IOException ex) {
                     continue;
                 }
@@ -130,22 +130,42 @@ public final class ForgeRefs {
             for (int i = 1; i < cpCount; i++) {
                 int tag = in.readUnsignedByte();
                 switch (tag) {
-                    case 1 -> {
+                    case 1: {
                         int len = in.readUnsignedShort();
-                        byte[] raw = in.readNBytes(len);
+                        byte[] raw = J8.readN(in, len);
                         utf8[i] = new String(raw, java.nio.charset.StandardCharsets.UTF_8);
+                        break;
                     }
-                    case 7 -> classRef[i] = in.readUnsignedShort();
-                    case 8, 16, 19, 20 -> in.skipBytes(2);
-                    case 15 -> in.skipBytes(3);
-                    case 3, 4, 9, 10, 11, 12, 17, 18 -> in.skipBytes(4);
-                    case 5, 6 -> {
+                    case 7:
+                        classRef[i] = in.readUnsignedShort();
+                        break;
+                    case 8:
+                    case 16:
+                    case 19:
+                    case 20:
+                        in.skipBytes(2);
+                        break;
+                    case 15:
+                        in.skipBytes(3);
+                        break;
+                    case 3:
+                    case 4:
+                    case 9:
+                    case 10:
+                    case 11:
+                    case 12:
+                    case 17:
+                    case 18:
+                        in.skipBytes(4);
+                        break;
+                    case 5:
+                    case 6: {
                         in.skipBytes(8);
                         i++; // long/double occupy two slots
+                        break;
                     }
-                    default -> {
+                    default:
                         return out; // unknown tag: give up on this class rather than mis-parse
-                    }
                 }
             }
             Map<String, Boolean> targetIsClass = new TreeMap<>();

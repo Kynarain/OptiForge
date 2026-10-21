@@ -1292,3 +1292,50 @@ SRG 编号），不是打补丁逻辑的问题——同代的 `H1` 就正常。�
   改写文档一律用编辑工具，不要用 PowerShell 重写整个文件。
 - Windows PowerShell 5.1 上 `@($raw | ConvertFrom-Json)` 会把整个数组包成单个元素（矩阵生成脚本踩过），
   必须先赋值再 `@()`。
+
+## 0.15.0：阶段 2（1.13–1.16.5）与阶段 3（≤1.12.2）打通
+
+同一套补丁/合并逻辑现在有三份产物，命名规则不变（`optiforge/` 放 OptiFine、modId `optiforge`、MPL 2.0）：
+
+| 产物 | 面向 | 入口 | 字节码 |
+|---|---|---|---|
+| `OptiForge-<v>.jar` | 1.17 – 26.x | ModLauncher `ITransformationService` | Java 17 |
+| `OptiForge-<v>-oldml.jar` | 1.13.2 – 1.16.5 | 同一服务，旧 ModLauncher（2–8）形态 | Java 8 |
+| `OptiForge-<v>-legacy.jar` | ≤ 1.12.2 | Forge coremod（`FMLCorePlugin` + `IClassTransformer`） | Java 8 |
+
+真机结果（JRE 1.8.0_503，干净 `mods/`、OptiFine 在 `optiforge/`）：
+
+| MC | Forge | OptiFine | 启动 | 进世界 | 证据 |
+|---|---|---|---|---|---|
+| 1.16.5 | 36.2.39 | `1.16.5 HD_U_G8` | 是 | 待回归 | 3319 条 `[OptiFine]`、0 崩溃；资源重载阶段有卡顿待修 |
+| 1.15.2 | 31.2.57 | `1.15.2 HD_U_G6` | 是 | 是 | 服务器 `Dev joined the game`、0 崩溃 |
+| 1.14.4 | 28.2.26 | `1.14.4 HD_U_G5` | 是 | 是 | 同上 |
+| 1.13.2 | 25.0.219 | `1.13.2 HD_U_G5` | 是 | 否（握手） | 标题界面、0 崩溃；该线 FML 无 `displayTest`，客户端多出的 mod 被服务器拒 |
+| 1.12.2 | 14.23.5.2860 | `1.12.2 HD_U_G5` | 是 | 是 | `OptiFine_1.12.2_HD_U_G5`、1669 条 `[OptiFine]`、0 崩溃、服务器 `Dev joined the game` |
+
+各线关键测量（本轮真机/离线核对）：
+
+- **1.14.4–1.16.5**：运行时是"官方类名 + `func_`/`field_` 成员名"，OptiFine 的 `patch/srg` 负载正好匹配，
+  不需要重映射；基包是**原版** `versions/<mc>/<mc>.jar`。1.16.5 = 311 补丁类/560 自有类，
+  1.15.2 = 299/517，1.14.4 = 246/466。
+- **1.13.2**：另一种世代——补丁是扁平混淆布局（`patch/<obf>.class.xdelta`，233 个），自有类在
+  `net/optifine/` 根下且引用混淆名，必须做**混淆名→运行时名**桥（新增 `ObfNamespaceRemap`：
+  4027 类 / 14542 字段 / 26093 方法，实测重映射 26987 处成员引用）。自有类的匿名类必须先把
+  自身 super/接口登记进层级再解析，否则 `TextureUtils$1.func_195410_a` 会留成 obf 名 → `AbstractMethodError`。
+- **1.12.2**：launchwrapper 世界，OptiFine 负载是扁平布局、目标就是原版混淆 jar（248/248 MD5 全中）；
+  自有类里有 2 个在 **jar 根**（`Config.class`、`awu$Builder.class`），必须原样落盘，否则
+  `net.optifine.CrashReporter` 引用裸 `Config` 时 `NoClassDefFoundError`。
+- **AT 重放**：旧线必须只读**本线**的 AT 配置。早先读了共享 rig 里所有 Forge 版本的配置
+  （14856 条/29 个文件），把 1.16.5 的 `ModelBakery.field_177606_o` 从 public 收窄成 protected，
+  直接 `IllegalAccessError`；只读本线（329/1→18 类）后干净。类级通配（`protected ... IngameGui *`）
+  也必须当成"整类放宽"，否则 `ForgeIngameGui` 访问 `field_73839_d` 会 `IllegalAccessError`。
+- **资源载荷**：OptiFine 请求的 `minecraft:optifine/ctm/**` 纹理来自 `patch/assets/**.xdelta`，
+  要用本线的 `client-<mc>-extra.jar` 解出来（1.13.2 815 个、1.14–1.16 各 1621 个）再 stage。
+- **启动器**：旧格式 profile（1.12.2）没有 `arguments.jvm`，必须自己补 `-cp` 与 `-Djava.library.path`；
+  游戏参数要从 **profile 的 `minecraftArguments`** 读（`--tweakClass FMLTweaker` 在那里），只读 parent 的会
+  退化成 `VanillaTweaker`，随后 `ClassNotFoundException: net.minecraft.client.Minecraft`。
+- **`@MCVersion`**：FML 1.12.2 会拒绝 `[1.8,1.12.2]`（"It will be ignored"），coremod 不带该注解即可。
+
+光影实测见 [docs/SHADERS.md](SHADERS.md)：Modrinth 三个高下载量包（Complementary Reimagined 72.2M、
+BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别编译 27/26/25 个 GL program、
+0 错误、0 崩溃；1.21.7 的 OptiFine 构建自身会跳过 shaderpack（`Shaders.loadShaderPack` 里无条件 `ifne`）。

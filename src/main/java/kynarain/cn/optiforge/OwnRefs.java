@@ -32,7 +32,7 @@ public final class OwnRefs {
 
     /** @return bytes with foreign class literals neutralised, or the input when there is nothing to do */
     public static byte[] apply(byte[] classBytes, String dottedClassName) {
-        return apply(classBytes, dottedClassName, java.util.Set.of());
+        return apply(classBytes, dottedClassName, J8.<String>setOf());
     }
 
     /**
@@ -49,9 +49,11 @@ public final class OwnRefs {
 
         int rewritten = 0;
         for (org.objectweb.asm.tree.MethodNode method : node.methods) {
-            for (AbstractInsnNode instruction : method.instructions) {
-                if (!(instruction instanceof LdcInsnNode ldc)) continue;
-                if (!(ldc.cst instanceof Type type)) continue;
+            for (AbstractInsnNode instruction : method.instructions.toArray()) {
+                if (!(instruction instanceof LdcInsnNode)) continue;
+                LdcInsnNode ldc = (LdcInsnNode) instruction;
+                if (!(ldc.cst instanceof Type)) continue;
+                Type type = (Type) ldc.cst;
                 if (type.getSort() != Type.OBJECT) continue;
                 String internal = type.getInternalName();
                 if (!internal.startsWith("net/minecraftforge/") && !internal.startsWith("net/neoforged/")) {

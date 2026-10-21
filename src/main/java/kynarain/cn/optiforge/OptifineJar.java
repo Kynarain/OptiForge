@@ -49,6 +49,8 @@ public final class OptifineJar {
 
     public final int patchSrg;
     public final int patchNotch;
+    /** Flat {@code patch/<obf>.class.xdelta} entries: the 1.13.2 / pre-1.14 payload generation. */
+    public final int patchFlat;
     public final int patchAssets;
     public final List<String> forgePatchTargets;
 
@@ -56,6 +58,8 @@ public final class OptifineJar {
     public final int notchOwnClasses;
     public final int srgForgeOwnClasses;
     public final int notchForgeOwnClasses;
+    /** Root-level {@code net/optifine/**} classes carried by the 1.13.2 generation. */
+    public final int rootOwnClasses;
 
     public final List<String> services;
     public final boolean hasPatchCfg;
@@ -64,8 +68,10 @@ public final class OptifineJar {
     public final boolean hasInstaller;
 
     private OptifineJar(Path path, long size, String sha256, String buildDate, int entryCount,
-                        int patchSrg, int patchNotch, int patchAssets, List<String> forgePatchTargets,
+                        int patchSrg, int patchNotch, int patchFlat, int patchAssets,
+                        List<String> forgePatchTargets,
                         int srgOwnClasses, int notchOwnClasses, int srgForgeOwnClasses, int notchForgeOwnClasses,
+                        int rootOwnClasses,
                         List<String> services, boolean hasPatchCfg, boolean hasPatch2Cfg,
                         boolean hasModsToml, boolean hasInstaller) {
         this.path = path;
@@ -75,12 +81,14 @@ public final class OptifineJar {
         this.entryCount = entryCount;
         this.patchSrg = patchSrg;
         this.patchNotch = patchNotch;
+        this.patchFlat = patchFlat;
         this.patchAssets = patchAssets;
         this.forgePatchTargets = Collections.unmodifiableList(forgePatchTargets);
         this.srgOwnClasses = srgOwnClasses;
         this.notchOwnClasses = notchOwnClasses;
         this.srgForgeOwnClasses = srgForgeOwnClasses;
         this.notchForgeOwnClasses = notchForgeOwnClasses;
+        this.rootOwnClasses = rootOwnClasses;
         this.services = Collections.unmodifiableList(services);
         this.hasPatchCfg = hasPatchCfg;
         this.hasPatch2Cfg = hasPatch2Cfg;
@@ -96,9 +104,9 @@ public final class OptifineJar {
     public static OptifineJar read(Path jar) throws IOException {
         String buildDate = null;
         int entryCount = 0;
-        int patchSrg = 0, patchNotch = 0, patchAssets = 0;
+        int patchSrg = 0, patchNotch = 0, patchFlat = 0, patchAssets = 0;
         List<String> forgeTargets = new ArrayList<>();
-        int srgOwn = 0, notchOwn = 0, srgForgeOwn = 0, notchForgeOwn = 0;
+        int srgOwn = 0, notchOwn = 0, srgForgeOwn = 0, notchForgeOwn = 0, rootOwn = 0;
         List<String> services = new ArrayList<>();
         boolean hasPatchCfg = false, hasPatch2Cfg = false, hasModsToml = false, hasInstaller = false;
 
@@ -112,7 +120,7 @@ public final class OptifineJar {
 
                 if (name.equals(MARKER_BUILDOF)) {
                     try (InputStream in = zip.getInputStream(e)) {
-                        buildDate = new String(in.readAllBytes(), StandardCharsets.US_ASCII).trim();
+                        buildDate = new String(J8.readAll(in), StandardCharsets.US_ASCII).trim();
                     }
                     continue;
                 }
@@ -122,7 +130,7 @@ public final class OptifineJar {
                 else if (name.equals(MARKER_INSTALLER)) hasInstaller = true;
                 else if (name.startsWith("META-INF/services/")) {
                     try (InputStream in = zip.getInputStream(e)) {
-                        String body = new String(in.readAllBytes(), StandardCharsets.UTF_8).trim()
+                        String body = new String(J8.readAll(in), StandardCharsets.UTF_8).trim()
                                 .replace("\r", "").replace("\n", ",");
                         services.add(name.substring("META-INF/services/".length()) + " = " + body);
                     } catch (IOException ignored) {
@@ -138,11 +146,16 @@ public final class OptifineJar {
                     }
                 } else if (name.startsWith(PREFIX_PATCH_NOTCH) && name.endsWith(SUFFIX_XDELTA)) {
                     patchNotch++;
+                } else if (name.startsWith("patch/") && name.endsWith(SUFFIX_XDELTA)
+                        && name.indexOf('/', "patch/".length()) < 0) {
+                    patchFlat++;
                 } else if (name.startsWith(PREFIX_PATCH_ASSETS) && name.endsWith(".xdelta")) {
                     patchAssets++;
                 } else if (name.startsWith("srg/") && name.endsWith(".class")) {
                     srgOwn++;
                     if (name.startsWith("srg/net/minecraftforge/")) srgForgeOwn++;
+                } else if (name.startsWith("net/optifine/") && name.endsWith(".class")) {
+                    rootOwn++;
                 } else if (name.startsWith("notch/") && name.endsWith(".class")) {
                     notchOwn++;
                     if (name.startsWith("notch/net/minecraftforge/")) notchForgeOwn++;
@@ -151,14 +164,15 @@ public final class OptifineJar {
         }
 
         return new OptifineJar(jar, Files.size(jar), sha256(jar), buildDate, entryCount,
-                patchSrg, patchNotch, patchAssets, forgeTargets,
-                srgOwn, notchOwn, srgForgeOwn, notchForgeOwn,
+                patchSrg, patchNotch, patchFlat, patchAssets, forgeTargets,
+                srgOwn, notchOwn, srgForgeOwn, notchForgeOwn, rootOwn,
                 services, hasPatchCfg, hasPatch2Cfg, hasModsToml, hasInstaller);
     }
 
     /** True when the zip looks like an OptiFine build, in either the installer or the mod-jar form. */
     public boolean looksLikeOptifine() {
-        return hasPatchCfg && (hasInstaller || srgOwnClasses > 0) && (patchSrg + patchNotch) > 0;
+        return hasPatchCfg && (hasInstaller || srgOwnClasses > 0 || rootOwnClasses > 0)
+                && (patchSrg + patchNotch + patchFlat) > 0;
     }
 
     private static String sha256(Path file) {

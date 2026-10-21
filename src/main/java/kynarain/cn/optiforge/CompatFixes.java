@@ -60,8 +60,9 @@ public final class CompatFixes {
         int ambient = 0;
         int window = 0;
         for (MethodNode method : node.methods) {
-            for (AbstractInsnNode instruction : method.instructions) {
-                if (!(instruction instanceof MethodInsnNode call)) continue;
+            for (AbstractInsnNode instruction : method.instructions.toArray()) {
+                if (!(instruction instanceof MethodInsnNode)) continue;
+                MethodInsnNode call = (MethodInsnNode) instruction;
                 // Rule 1: OptiFine's own ShaderInstance cache passes namespaced shader names to
                 // ResourceLocation.withDefaultNamespace, which rejects them (Forge registers
                 // 'forge:rendertype_*'). parse() accepts both forms.
@@ -129,18 +130,20 @@ public final class CompatFixes {
         int changed = 0;
         for (MethodNode method : node.methods) {
             boolean afterSetupField = false;
-            for (AbstractInsnNode instruction : method.instructions) {
-                if (instruction instanceof FieldInsnNode field
-                        && field.owner.equals("net/optifine/reflect/Reflector")
-                        && field.name.startsWith("ImmediateWindowHandler")) {
+            for (AbstractInsnNode instruction : method.instructions.toArray()) {
+                if (instruction instanceof FieldInsnNode
+                        && ((FieldInsnNode) instruction).owner.equals("net/optifine/reflect/Reflector")
+                        && ((FieldInsnNode) instruction).name.startsWith("ImmediateWindowHandler")) {
+                    FieldInsnNode field = (FieldInsnNode) instruction;
                     afterSetupField = true;
                     continue;
                 }
                 if (!afterSetupField) continue;
-                if (instruction instanceof MethodInsnNode call
-                        && "net/optifine/reflect/ReflectorMethod".equals(call.owner)
-                        && "callLong".equals(call.name)
-                        && "([Ljava/lang/Object;)J".equals(call.desc)) {
+                if (instruction instanceof MethodInsnNode
+                        && "net/optifine/reflect/ReflectorMethod".equals(((MethodInsnNode) instruction).owner)
+                        && "callLong".equals(((MethodInsnNode) instruction).name)
+                        && "([Ljava/lang/Object;)J".equals(((MethodInsnNode) instruction).desc)) {
+                    MethodInsnNode call = (MethodInsnNode) instruction;
                     // Four arguments are supplied, Forge 26's method wants five. Return 0 instead of
                     // invoking it: Window stores the result and only uses it when it is non-zero, so 0 sends
                     // control down the vanilla window creation (measured layout: callLong -> lstore 8 ->
@@ -168,15 +171,16 @@ public final class CompatFixes {
         int changed = 0;
         for (MethodNode method : node.methods) {
             boolean afterField = false;
-            for (AbstractInsnNode instruction : method.instructions) {
-                if (instruction instanceof FieldInsnNode field
-                        && "net/optifine/reflect/Reflector".equals(field.owner)
-                        && field.name.contains("fireRenderNameTagEvent")) {
+            for (AbstractInsnNode instruction : method.instructions.toArray()) {
+                if (instruction instanceof FieldInsnNode
+                        && "net/optifine/reflect/Reflector".equals(((FieldInsnNode) instruction).owner)
+                        && ((FieldInsnNode) instruction).name.contains("fireRenderNameTagEvent")) {
                     afterField = true;
                     continue;
                 }
                 if (!afterField) continue;
-                if (instruction instanceof MethodInsnNode call && "exists".equals(call.name)) {
+                if (instruction instanceof MethodInsnNode
+                        && "exists".equals(((MethodInsnNode) instruction).name)) {
                     method.instructions.insertBefore(instruction, new InsnNode(Opcodes.POP));
                     method.instructions.set(instruction, new InsnNode(Opcodes.ICONST_0));
                     changed++;

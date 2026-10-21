@@ -39,13 +39,13 @@ public final class ForgeInterfaces {
             // side. Availability has to reflect *this* launch: measured, the 1.21.x universal jars still
             // carry IForgeVertexFormat, which made the check report "present" while Forge 64 lacked it.
             String path = jar.toString().replace('\\', '/');
-            if (versionTag != null && !versionTag.isBlank()
+            if (versionTag != null && !J8.isBlank(versionTag)
                     && path.contains("/net/minecraftforge/forge/")
                     && !path.contains("/" + versionTag + "/")) {
                 continue;
             }
             try (ZipFile zip = new ZipFile(jar.toFile())) {
-                var entries = zip.entries();
+                java.util.Enumeration<? extends ZipEntry> entries = zip.entries();
                 while (entries.hasMoreElements()) {
                     ZipEntry entry = entries.nextElement();
                     String name = entry.getName();
@@ -64,7 +64,7 @@ public final class ForgeInterfaces {
      * @return the dotted names that were dropped, empty when nothing changed
      */
     public static List<String> strip(ClassNode node, Set<String> available) {
-        if (node.interfaces == null || node.interfaces.isEmpty() || available.isEmpty()) return List.of();
+        if (node.interfaces == null || node.interfaces.isEmpty() || available.isEmpty()) return J8.<String>listOf();
         List<String> dropped = new ArrayList<>();
         for (String itf : new ArrayList<>(node.interfaces)) {
             if (!itf.startsWith("net/minecraftforge/") && !itf.startsWith("net/neoforged/")) continue;
@@ -94,7 +94,7 @@ public final class ForgeInterfaces {
         int best = -1;
         for (Path jar : LaunchPaths.jars(gameDir)) {
             String path = jar.toString().replace('\\', '/');
-            if (versionTag != null && !versionTag.isBlank()
+            if (versionTag != null && !J8.isBlank(versionTag)
                     && path.contains("/net/minecraftforge/forge/")
                     && !path.contains("/" + versionTag + "/")) {
                 continue;
@@ -102,7 +102,7 @@ public final class ForgeInterfaces {
             try (ZipFile zip = new ZipFile(jar.toFile())) {
                 ZipEntry entry = zip.getEntry(ownerInternal + ".class");
                 if (entry == null) continue;
-                try (var in = zip.getInputStream(entry)) {
+                try (java.io.InputStream in = zip.getInputStream(entry)) {
                     org.objectweb.asm.tree.ClassNode node = new org.objectweb.asm.tree.ClassNode();
                     new org.objectweb.asm.ClassReader(in).accept(node, 0);
                     for (org.objectweb.asm.tree.MethodNode method : node.methods) {

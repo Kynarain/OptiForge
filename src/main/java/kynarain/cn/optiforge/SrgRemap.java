@@ -72,7 +72,7 @@ public final class SrgRemap {
     }
 
     public Result remap(byte[] classBytes) {
-        return remap(classBytes, java.util.Set.of());
+        return remap(classBytes, J8.<String>setOf());
     }
 
     /**
@@ -109,7 +109,7 @@ public final class SrgRemap {
             int entryStart = pos;
             pos += 1;
             switch (tag) {
-                case 1 -> {
+                case 1: {
                     int len = readU2(classBytes, pos);
                     pos += 2;
                     String value = new String(classBytes, pos, len, StandardCharsets.UTF_8);
@@ -125,18 +125,36 @@ public final class SrgRemap {
                             unmapped++;
                         }
                     }
+                    break;
                 }
-                case 7, 8, 16, 19, 20 -> pos += 2;
-                case 15 -> pos += 3;
-                case 3, 4, 9, 10, 11, 12, 17, 18 -> pos += 4;
-                case 5, 6 -> {
+                case 7:
+                case 8:
+                case 16:
+                case 19:
+                case 20:
+                    pos += 2;
+                    break;
+                case 15:
+                    pos += 3;
+                    break;
+                case 3:
+                case 4:
+                case 9:
+                case 10:
+                case 11:
+                case 12:
+                case 17:
+                case 18:
+                    pos += 4;
+                    break;
+                case 5:
+                case 6:
                     pos += 8;
                     i++;
-                }
-                default -> {
+                    break;
+                default:
                     // Unknown tag: leave the class untouched rather than emit a corrupt one.
                     return new Result(classBytes, 0, 0);
-                }
             }
         }
         if (renamed == 0) return new Result(classBytes, 0, unmapped);
@@ -194,17 +212,36 @@ public final class SrgRemap {
             for (int i = 1; i < cpCount; i++) {
                 int tag = cursor.takeU1();
                 switch (tag) {
-                    case 1 -> utf8.put(i, cursor.takeUtf8());
-                    case 7, 8, 16, 19, 20 -> cursor.skip(2);
-                    case 15 -> cursor.skip(3);
-                    case 3, 4, 9, 10, 11, 12, 17, 18 -> cursor.skip(4);
-                    case 5, 6 -> {
+                    case 1:
+                        utf8.put(i, cursor.takeUtf8());
+                        break;
+                    case 7:
+                    case 8:
+                    case 16:
+                    case 19:
+                    case 20:
+                        cursor.skip(2);
+                        break;
+                    case 15:
+                        cursor.skip(3);
+                        break;
+                    case 3:
+                    case 4:
+                    case 9:
+                    case 10:
+                    case 11:
+                    case 12:
+                    case 17:
+                    case 18:
+                        cursor.skip(4);
+                        break;
+                    case 5:
+                    case 6:
                         cursor.skip(8);
                         i++;
-                    }
-                    default -> {
+                        break;
+                    default:
                         return blocked;
-                    }
                 }
             }
             cursor.skip(6); // access, this, super

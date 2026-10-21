@@ -35,9 +35,9 @@ public final class Diagnose {
     public static final String VERSION = readVersion();
 
     private static String readVersion() {
-        try (var in = Diagnose.class.getResourceAsStream("/optiforge/version.txt")) {
+        try (java.io.InputStream in = Diagnose.class.getResourceAsStream("/optiforge/version.txt")) {
             if (in != null) {
-                String text = new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8).trim();
+                String text = new String(J8.readAll(in), java.nio.charset.StandardCharsets.UTF_8).trim();
                 if (!text.isEmpty()) return text;
             }
         } catch (java.io.IOException ignored) {
@@ -81,7 +81,7 @@ public final class Diagnose {
         if (outFile != null) {
             try {
                 Files.createDirectories(outFile.getParent());
-                Files.writeString(outFile, report, StandardCharsets.UTF_8);
+                J8.writeString(outFile, report);
                 out.println("[OptiForge] report written to " + outFile);
             } catch (IOException e) {
                 out.println("[OptiForge] could not write report to " + outFile + ": " + e);
@@ -95,7 +95,7 @@ public final class Diagnose {
         StringBuilder sb = new StringBuilder();
         sb.append("OptiForge ").append(VERSION).append(" - diagnosis\n");
         sb.append("generated ").append(LocalDateTime.now().format(STAMP)).append("\n");
-        sb.append("=".repeat(72)).append("\n\n");
+        sb.append(J8.repeat("=", 72)).append("\n\n");
 
         sb.append("[environment]\n").append(info.describe()).append('\n');
         sb.append("Java            : ").append(System.getProperty("java.version"))
@@ -126,11 +126,13 @@ public final class Diagnose {
                     .append('\n');
             sb.append("    payload     : patch/srg=").append(jar.patchSrg)
                     .append("  patch/notch=").append(jar.patchNotch)
+                    .append("  patch/flat=").append(jar.patchFlat)
                     .append("  patch/assets=").append(jar.patchAssets).append('\n');
             sb.append("    own classes : srg/=").append(jar.srgOwnClasses)
                     .append(" (forge ").append(jar.srgForgeOwnClasses).append(')')
                     .append("  notch/=").append(jar.notchOwnClasses)
-                    .append(" (forge ").append(jar.notchForgeOwnClasses).append(")\n");
+                    .append(" (forge ").append(jar.notchForgeOwnClasses).append(')')
+                    .append("  root net/optifine=").append(jar.rootOwnClasses).append(")\n");
             sb.append("    flags       : patch.cfg=").append(jar.hasPatchCfg)
                     .append(" patch2.cfg=").append(jar.hasPatch2Cfg)
                     .append(" mods.toml=").append(jar.hasModsToml)
@@ -196,17 +198,28 @@ public final class Diagnose {
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
-                case "--mc" -> mc = args[++i];
-                case "--forge" -> forge = args[++i];
-                case "--gamedir" -> gameDir = Paths.get(args[++i]);
-                case "--out" -> out = Paths.get(args[++i]);
-                case "--jar" -> jars.add(Paths.get(args[++i]));
-                case "--help", "-h" -> {
+                case "--mc":
+                    mc = args[++i];
+                    break;
+                case "--forge":
+                    forge = args[++i];
+                    break;
+                case "--gamedir":
+                    gameDir = Paths.get(args[++i]);
+                    break;
+                case "--out":
+                    out = Paths.get(args[++i]);
+                    break;
+                case "--jar":
+                    jars.add(Paths.get(args[++i]));
+                    break;
+                case "--help":
+                case "-h":
                     System.out.println("usage: Diagnose --jar <file>... [--forge <version>] [--mc <version>]"
                             + " [--gamedir <dir>] [--out <file>]");
                     return;
-                }
-                default -> throw new IllegalArgumentException("unknown argument: " + args[i]);
+                default:
+                    throw new IllegalArgumentException("unknown argument: " + args[i]);
             }
         }
         if (jars.isEmpty() && gameDir != null && Files.isDirectory(gameDir.resolve("mods"))) {
@@ -237,7 +250,7 @@ public final class Diagnose {
         System.out.println(report);
         if (out != null) {
             Files.createDirectories(out.getParent());
-            Files.writeString(out, report, StandardCharsets.UTF_8);
+            J8.writeString(out, report);
             System.out.println("[OptiForge] report written to " + out);
         }
     }

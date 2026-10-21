@@ -25,37 +25,43 @@ import java.util.Set;
 public final class OptifineClassTransformer implements ITransformer<ClassNode> {
 
     private final OptifinePack pack;
-    private final Set<Target> targets;
+    private final Set<ITransformer.Target> targets;
     private int applied;
 
     private final boolean modern;
     private final Set<String> runtimePatched;
 
-    public OptifineClassTransformer(OptifinePack pack) {
+    public OptifineClassTransformer(OptifinePack pack, TargetFactory targetFactory) {
         this.pack = pack;
         this.modern = OptifinePack.mcVersion != null && OptifinePack.mcVersion.startsWith("26.");
         this.runtimePatched = RuntimePatches.targets(modern);
-        Set<Target> set = new LinkedHashSet<>();
+        Set<ITransformer.Target> set = new LinkedHashSet<ITransformer.Target>();
         for (String className : pack.patchedClasses.keySet()) {
-            set.add(Target.targetPreClass(className));
+            set.addAll(targetFactory.targetsFor(className));
         }
         for (String className : runtimePatched) {
-            set.add(Target.targetPreClass(className));
+            set.addAll(targetFactory.targetsFor(className));
         }
-        this.targets = Set.copyOf(set);
+        this.targets = J8.setCopyOf(set);
     }
 
     @Override
     public ClassNode transform(ClassNode input, ITransformerVotingContext context) {
+        if (input == null || input.name == null) return input;
+        String className = input.name.replace('/', '.');
+        // ModLauncher 2.1.1 (Forge 1.13.2) has no targetPreClass and its voting context is an empty marker
+        // interface, so transform() can be called for classes that are not targets; bail out before any
+        // ASM work.
+        if (pack.patched(className) == null && !runtimePatched.contains(className)) return input;
         // the game module only exists once classes are being transformed
-        OptiForgeService.ensureModuleReads();
+        Bootstrap.ensureModuleReads();
         ClassNode patchedForge = RuntimePatches.apply(input, modern);
         if (patchedForge != null) return patchedForge;
-        byte[] prepared = pack.patched(context.getClassName());
+        byte[] prepared = pack.patched(className);
         if (prepared == null) return input;
         ClassNode node = new ClassNode();
         new ClassReader(prepared).accept(node, 0);
-        reportAdditions(input, node, context.getClassName());
+        reportAdditions(input, node, className);
         mergeInPlaceAdditions(input, node);
         applied++;
         return node;
@@ -134,8 +140,10 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
 
     /** @return true when the method calls into a class other than itself through invokespecial. */
     private static boolean hasSuperCall(org.objectweb.asm.tree.MethodNode method, String selfName) {
-        for (org.objectweb.asm.tree.AbstractInsnNode instruction : method.instructions) {
-            if (!(instruction instanceof org.objectweb.asm.tree.MethodInsnNode call)) continue;
+        for (org.objectweb.asm.tree.AbstractInsnNode instruction = method.instructions.getFirst();
+                instruction != null; instruction = instruction.getNext()) {
+            if (!(instruction instanceof org.objectweb.asm.tree.MethodInsnNode)) continue;
+            org.objectweb.asm.tree.MethodInsnNode call = (org.objectweb.asm.tree.MethodInsnNode) instruction;
             if (call.getOpcode() != Opcodes.INVOKESPECIAL) continue;
             if (call.owner.equals(selfName)) continue;
             return true;
@@ -160,7 +168,8 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         int guards = 0;
         for (org.objectweb.asm.tree.MethodNode method : methods) {
             for (org.objectweb.asm.tree.AbstractInsnNode instruction : method.instructions.toArray()) {
-                if (!(instruction instanceof org.objectweb.asm.tree.FieldInsnNode read)) continue;
+                if (!(instruction instanceof org.objectweb.asm.tree.FieldInsnNode)) continue;
+                org.objectweb.asm.tree.FieldInsnNode read = (org.objectweb.asm.tree.FieldInsnNode) instruction;
                 if (read.getOpcode() != org.objectweb.asm.Opcodes.GETSTATIC) continue;
                 if (!names.contains(read.name + read.desc)) continue;
                 org.objectweb.asm.tree.InsnList guard = new org.objectweb.asm.tree.InsnList();
@@ -194,19 +203,8 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
                         component.startsWith("[") ? component : component.substring(1,
                                 component.length() - 1)));
             } else {
-                String primitive = switch (component.charAt(0)) {
-                    case 'Z' -> "BOOLEAN";
-                    case 'B' -> "BYTE";
-                    case 'C' -> "CHAR";
-                    case 'S' -> "SHORT";
-                    case 'I' -> "INT";
-                    case 'J' -> "LONG";
-                    case 'F' -> "FLOAT";
-                    case 'D' -> "DOUBLE";
-                    default -> "INT";
-                };
                 list.add(new org.objectweb.asm.tree.IntInsnNode(Opcodes.NEWARRAY,
-                        primitiveArrayType(primitive)));
+                        primitiveArrayType(component.charAt(0))));
             }
             return list;
         }
@@ -229,18 +227,26 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         return null;
     }
 
-    private static int primitiveArrayType(String name) {
-        return switch (name) {
-            case "BOOLEAN" -> Opcodes.T_BOOLEAN;
-            case "BYTE" -> Opcodes.T_BYTE;
-            case "CHAR" -> Opcodes.T_CHAR;
-            case "SHORT" -> Opcodes.T_SHORT;
-            case "INT" -> Opcodes.T_INT;
-            case "LONG" -> Opcodes.T_LONG;
-            case "FLOAT" -> Opcodes.T_FLOAT;
-            case "DOUBLE" -> Opcodes.T_DOUBLE;
-            default -> Opcodes.T_INT;
-        };
+    /** Array element type for a primitive field descriptor character, e.g. {@code 'I'} -> {@code T_INT}. */
+    private static int primitiveArrayType(char descriptor) {
+        switch (descriptor) {
+            case 'Z':
+                return Opcodes.T_BOOLEAN;
+            case 'B':
+                return Opcodes.T_BYTE;
+            case 'C':
+                return Opcodes.T_CHAR;
+            case 'S':
+                return Opcodes.T_SHORT;
+            case 'J':
+                return Opcodes.T_LONG;
+            case 'F':
+                return Opcodes.T_FLOAT;
+            case 'D':
+                return Opcodes.T_DOUBLE;
+            default:
+                return Opcodes.T_INT;
+        }
     }
 
     /**
@@ -288,10 +294,12 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
                     || cursor instanceof org.objectweb.asm.tree.FrameNode) {
                 start = cursor;
             }
-            if (cursor instanceof org.objectweb.asm.tree.FieldInsnNode put
-                    && put.getOpcode() == org.objectweb.asm.Opcodes.PUTSTATIC
-                    && wanted.contains(put.name + put.desc)
+            if (cursor instanceof org.objectweb.asm.tree.FieldInsnNode
+                    && ((org.objectweb.asm.tree.FieldInsnNode) cursor).getOpcode() == org.objectweb.asm.Opcodes.PUTSTATIC
+                    && wanted.contains(((org.objectweb.asm.tree.FieldInsnNode) cursor).name
+                            + ((org.objectweb.asm.tree.FieldInsnNode) cursor).desc)
                     && start != null) {
+                org.objectweb.asm.tree.FieldInsnNode put = (org.objectweb.asm.tree.FieldInsnNode) cursor;
                 for (org.objectweb.asm.tree.AbstractInsnNode copy = start;
                         copy != null && copy != cursor.getNext(); copy = copy.getNext()) {
                     batch.add(copy);
@@ -324,8 +332,16 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
      */
     @Override
     public TransformerVoteResult castVote(ITransformerVotingContext context) {
-        if (pack.patched(context.getClassName()) == null
-                && !runtimePatched.contains(context.getClassName())) {
+        String className = contextClassName(context);
+        if (className == null) {
+            // ModLauncher 2.1.1's ITransformerVotingContext is an empty marker interface: there is no way
+            // to know which class this vote is about. Vote yes and let transform() discard non-targets
+            // after a single map lookup (it returns the input untouched).
+            return Boolean.getBoolean("optiforge.deferVote")
+                    ? TransformerVoteResult.DEFER
+                    : TransformerVoteResult.YES;
+        }
+        if (pack.patched(className) == null && !runtimePatched.contains(className)) {
             return TransformerVoteResult.NO;
         }
         return Boolean.getBoolean("optiforge.deferVote")
@@ -333,8 +349,36 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
                 : TransformerVoteResult.YES;
     }
 
+    private static volatile java.lang.reflect.Method CONTEXT_CLASS_NAME;
+    private static volatile boolean CONTEXT_CLASS_NAME_RESOLVED;
+
+    /** Reads {@code context.getClassName()} reflectively: the method does not exist on ModLauncher 2.1.1. */
+    private static String contextClassName(ITransformerVotingContext context) {
+        if (context == null) return null;
+        if (!CONTEXT_CLASS_NAME_RESOLVED) {
+            synchronized (OptifineClassTransformer.class) {
+                if (!CONTEXT_CLASS_NAME_RESOLVED) {
+                    try {
+                        CONTEXT_CLASS_NAME = ITransformerVotingContext.class.getMethod("getClassName");
+                    } catch (Throwable ignored) {
+                        CONTEXT_CLASS_NAME = null;
+                    }
+                    CONTEXT_CLASS_NAME_RESOLVED = true;
+                }
+            }
+        }
+        java.lang.reflect.Method method = CONTEXT_CLASS_NAME;
+        if (method == null) return null;
+        try {
+            Object value = method.invoke(context);
+            return value instanceof String ? (String) value : null;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     @Override
-    public Set<Target> targets() {
+    public Set<ITransformer.Target> targets() {
         return targets;
     }
 
@@ -382,8 +426,10 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         for (org.objectweb.asm.tree.MethodNode method : prepared.methods) {
             if (!method.name.equals("<init>")) continue;
             boolean firstParamIsMinecraft = method.desc.startsWith("(Lnet/minecraft/client/Minecraft;");
-            for (org.objectweb.asm.tree.AbstractInsnNode instruction : method.instructions) {
-                if (!(instruction instanceof org.objectweb.asm.tree.MethodInsnNode call)) continue;
+            for (org.objectweb.asm.tree.AbstractInsnNode instruction = method.instructions.getFirst();
+                    instruction != null; instruction = instruction.getNext()) {
+                if (!(instruction instanceof org.objectweb.asm.tree.MethodInsnNode)) continue;
+                org.objectweb.asm.tree.MethodInsnNode call = (org.objectweb.asm.tree.MethodInsnNode) instruction;
                 if (call.getOpcode() != org.objectweb.asm.Opcodes.INVOKESPECIAL) continue;
                 if (!call.owner.equals("java/lang/Object") || !call.name.equals("<init>")) continue;
                 call.owner = superName;

@@ -86,7 +86,7 @@ public final class RuntimeInfo {
 
         Path gameDir = fallbackGameDir;
         String argGameDir = args.get("gameDir");
-        if (argGameDir != null && !argGameDir.isBlank()) {
+        if (argGameDir != null && !J8.isBlank(argGameDir)) {
             try {
                 gameDir = Paths.get(argGameDir);
             } catch (RuntimeException ignored) {
@@ -103,7 +103,7 @@ public final class RuntimeInfo {
     }
 
     private static String orDefault(String preferred, String fallback) {
-        return preferred == null || preferred.isBlank() ? fallback : preferred.trim();
+        return preferred == null || J8.isBlank(preferred) ? fallback : preferred.trim();
     }
 
     public boolean known() {

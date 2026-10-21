@@ -125,7 +125,7 @@ public final class ForgeMatrix {
         String line;
         boolean header = true;
         while ((line = reader.readLine()) != null) {
-            if (line.isBlank() || line.startsWith("#")) continue;
+            if (J8.isBlank(line) || line.startsWith("#")) continue;
             if (header) {
                 header = false;
                 if (line.toLowerCase(Locale.ROOT).startsWith("mcversion")) continue;

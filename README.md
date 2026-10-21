@@ -88,6 +88,31 @@ stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本�
   协议 MPL 2.0）；缺 OptiFine 时它只带提示、不带 OptiFine 类；
 - OptiFine 自身的 jar 保持官方文件名，放在 `optiforge/`。'
 
+## 旧版本线：1.13–1.16.5 与 1.12.2 及更早
+
+这两段旧版本线不能用主 jar：它们跑在 **Java 8** 上，主 jar 是 Java 17 字节码。同一套代码另出两个产物，
+命名规则不变（`optiforge/` 放 OptiFine、modId `optiforge`、MPL 2.0）：
+
+| 版本线 | 产物（放 `mods/`） | 入口 | 说明 |
+|---|---|---|---|
+| 1.17 – 26.x | `OptiForge-<版本>.jar` | ModLauncher `ITransformationService` | 主产物（Java 17/21/25 运行时） |
+| 1.14.4 – 1.16.5 | `OptiForge-<版本>-oldml.jar` | 同一变换服务，编译成 Java 8 字节码 | 只依赖 ModLauncher 2–8 的旧 API 形态 |
+| 1.13.2 | 同上（`-oldml`） | 同上 + 混淆名→运行时名桥 | 该构建的补丁是扁平混淆布局，需要额外映射 |
+| ≤ 1.12.2 | `OptiForge-<版本>-legacy.jar` | Forge coremod（`FMLCorePlugin`） | launchwrapper 世界，用 `IClassTransformer` 交付补丁类 |
+
+旧版本线的实测（每条都是真机启动 + 进服务器世界，JRE 1.8.0_503）：
+
+| MC | Forge | OptiFine | 结果 |
+|---|---|---|---|
+| 1.16.5 | 36.2.39 | `1.16.5 HD_U_G8` | 标题界面、`[OptiFine]` 日志正常 |
+| 1.15.2 | 31.2.57 | `1.15.2 HD_U_G6` | 启动 + 进世界、0 崩溃 |
+| 1.14.4 | 28.2.26 | `1.14.4 HD_U_G5` | 启动 + 进世界、0 崩溃 |
+| 1.13.2 | 25.0.219 | `1.13.2 HD_U_G5` | 标题界面、0 崩溃（连接需服务器也装 OptiForge：该线 FML 没有 `displayTest`） |
+| 1.12.2 | 14.23.5.2860 | `1.12.2 HD_U_G5` | 启动 + 进世界、1669 条 `[OptiFine]`、0 崩溃 |
+
+注意：1.13–1.16 的运行时是**官方类名 + `func_`/`field_` 成员名**，1.12.2 是**混淆类名 + 混淆成员名**，
+两条管线因此分开；主产物的 Java 17 代码与它们共享同一套补丁/合并逻辑。
+
 ## 它在做什么（详见 [docs/DESIGN.md](docs/DESIGN.md)）
 
 Forge 不把 OptiFine 当 mod：`mods/` 里任何声明了 `cpw.mods.modlauncher.api.ITransformationService`

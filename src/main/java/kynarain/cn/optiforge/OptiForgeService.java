@@ -5,11 +5,7 @@ import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
 import cpw.mods.modlauncher.api.IncompatibleEnvironmentException;
 
-import java.io.IOException;
 import java.net.URL;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -18,7 +14,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
- * OptiForge's ModLauncher entry point: it takes OptiFine over completely.
+ * OptiForge's ModLauncher entry point for the Java-17 artifact (Forge 1.17+, ModLauncher 9/10).
  *
  * <p>Forge finds this class because the jar declares
  * {@code META-INF/services/cpw.mods.modlauncher.api.ITransformationService}. Forge's
@@ -26,29 +22,17 @@ import java.util.function.Supplier;
  * transformation service and excludes it from ordinary mod discovery - which is why this project has
  * no {@code mods.toml} and no {@code @Mod}.
  *
- * <p><b>State is static on purpose.</b> Measured: ModLauncher instantiates the service more than once
- * for one launch (one instance ran {@code initialize}, wrote the pack and then its
- * {@code additionalClassesLocator} was never consulted, while another instance's {@code onLoad} saw
- * {@code pack == null} and its locator answered "empty" for every name). That split turned into
- * {@code NoClassDefFoundError: net/optifine/util/MathUtils} while {@code net.minecraft.Util}
- * initialised. One process, one pack: everything below is process-wide and prepared exactly once.
- *
- * <p>The user's OptiFine jar must live in {@code <game>/optiforge/}, not in {@code mods/}: if it is in
- * {@code mods/}, OptiFine's own service runs as well and both pipelines patch the same classes.
+ * <p>The legacy artifact (Forge 1.14.4-1.16.5, Java 8, ModLauncher 2-8) has its own entry point,
+ * {@code kynarain.cn.optiforge.oldml.OldModLauncherService}; both delegate the pack/transform
+ * orchestration to {@link Bootstrap}. The user's OptiFine jar must live in {@code <game>/optiforge/},
+ * not in {@code mods/}: if it is in {@code mods/}, OptiFine's own service runs as well and both
+ * pipelines patch the same classes.
  */
 public final class OptiForgeService implements ITransformationService {
 
     public static final String NAME = "optiforge";
 
-    private static final StringBuilder NOTES = new StringBuilder();
-    private static volatile boolean prepared;
-    private static volatile Path gameDir;
-    private static volatile Path reportFile;
-    private static volatile RuntimeInfo info;
-    private static volatile OptifinePack pack;
-    private static volatile OptifineClassTransformer transformer;
     private static volatile IEnvironment environment;
-    private static final java.util.concurrent.atomic.AtomicBoolean READS_INSTALLED = new java.util.concurrent.atomic.AtomicBoolean();
 
     @Override
     public String name() {
@@ -57,130 +41,24 @@ public final class OptiForgeService implements ITransformationService {
 
     @Override
     public void initialize(IEnvironment environment) {
+        OptiForgeService.environment = environment;
+        // Java-9-only pieces are installed as hooks, so the shared pipeline never links against them.
+        Bootstrap.setTargetFactory(new ModernTargets());
+        Bootstrap.setModuleReadsHook(ModuleReadsInjector::apply);
+        Bootstrap.setModuleReadsInstaller(OptiForgeService::ensureModuleReads);
         try {
-            OptiForgeService.environment = environment;
-            try {
-                RuntimeInfo info = RuntimeInfo.fromLaunchArguments(null);
-                OptifinePack.mcVersion = info.mcVersion;
-            } catch (Throwable ignored) {
-                // the version is only used to gate version-specific fixes
-            }
-            rememberParentModules(environment);
-            if (gameDir == null) {
-                gameDir = environment.getProperty(IEnvironment.Keys.GAMEDIR.get()).orElse(null);
-            }
-            if (reportFile == null && gameDir != null) {
-                reportFile = gameDir.resolve("optiforge").resolve("diagnose.txt");
-            }
-            if (info == null && gameDir != null) {
-                info = RuntimeInfo.fromLaunchArguments(gameDir);
-            }
-            ensurePack();
-        } catch (Throwable t) {
-            synchronized (NOTES) {
-                NOTES.append("OptiForge failed in initialize: ").append(t).append('\n');
-            }
-            t.printStackTrace(System.out);
+            RuntimeInfo info = RuntimeInfo.fromLaunchArguments(null);
+            OptifinePack.mcVersion = info.mcVersion;
+        } catch (Throwable ignored) {
+            // the version is only used to gate version-specific fixes
         }
+        rememberParentModules(environment);
+        Bootstrap.ensurePack(environment);
     }
 
-    /** Builds the pack once per process and writes the report. Idempotent. */
+    /** Kept for the transform path and the diagnostics: one pack per process, built by {@link Bootstrap}. */
     static OptifinePack ensurePack() {
-        if (prepared) return pack;
-        synchronized (OptiForgeService.class) {
-            if (prepared) return pack;
-            // The first call can come from additionalClassesLocator()/transformers(), before any
-            // initialize() has handed us an IEnvironment - so recover the game directory from the
-            // launch arguments (--gameDir) first. Without this the pack was built with gameDir=null,
-            // "no OptiFine jar" was reported, and the launch looked successful while OptiFine was absent.
-            if (gameDir == null || info == null) {
-                RuntimeInfo parsed = RuntimeInfo.fromLaunchArguments(gameDir);
-                if (gameDir == null) gameDir = parsed.gameDir;
-                if (info == null) info = parsed;
-                if (reportFile == null && gameDir != null) {
-                    reportFile = gameDir.resolve("optiforge").resolve("diagnose.txt");
-                }
-            }
-            if (gameDir == null) {
-                // No environment at all yet: leave prepared=false so a later call can still build.
-                return null;
-            }
-            prepared = true;
-            try {
-                if (info == null) {
-                    info = RuntimeInfo.fromLaunchArguments(gameDir);
-                }
-                NOTES.append("OptiForge ").append(Diagnose.VERSION).append('\n')
-                        .append(info.describe()).append('\n');
-
-                OptifinePack.Namespace runtime = OptifinePack.detectRuntimeNamespace(NOTES);
-                Path mapping = OptifinePack.pickMapping(info.mcVersion, NOTES);
-                // Remap only when the runtime speaks official names: an SRG payload on a SRG runtime is
-                // already correct, and renaming it would be the bug. When the payload is official too,
-                // the rename matches zero tokens and is a no-op.
-                boolean remapEnabled = runtime == OptifinePack.Namespace.OFFICIAL && mapping != null;
-                NOTES.append("remap: ").append(remapEnabled ? "enabled" : "disabled")
-                        .append(" (runtime=").append(runtime)
-                        .append(", mapping=").append(mapping == null ? "none" : mapping.getFileName())
-                        .append(")\n");
-
-                Path optifineJar = OptifinePack.findOptifineJar(gameDir,
-                        System.getProperty("optiforge.optifine"), NOTES);
-                if (optifineJar == null) {
-                    NOTES.append("no OptiFine jar: put it in <game>/optiforge/ (or pass -Doptiforge.optifine=)\n");
-                    // The prompt is in-game (optiforge/generated/Notice), like OptiFabric's title-screen error:
-                    // the folder is created so it can be pointed at, and the staged mod reports the problem.
-                    System.setProperty("optiforge.missingOptifine", "true");
-                    System.setProperty("optiforge.gameDir", gameDir.toAbsolutePath().toString());
-                    try {
-                        java.nio.file.Files.createDirectories(gameDir.resolve("optiforge"));
-                        OptifinePack.removeLegacyStagedJar(gameDir);
-                        OptifinePack.stageNoticeOnly(gameDir, NOTES);
-                    } catch (java.io.IOException e) {
-                        NOTES.append("could not stage the notice mod: ").append(e).append('\n');
-                    }
-                    finish();
-                    return null;
-                }
-                System.clearProperty("optiforge.missingOptifine");
-                System.setProperty("optiforge.gameDir", gameDir.toAbsolutePath().toString());
-                OptifinePack.removeLegacyStagedJar(gameDir);
-                Path baseJar = OptifinePack.findBaseJar(info, gameDir, optifineJar,
-                        System.getProperty("optiforge.vanilla"), NOTES);
-                if (baseJar == null) {
-                    finish();
-                    return null;
-                }
-                // Both versions have to be known *before* prepare(): the interface-availability index is
-                // built from this launch's Forge jars, and a later assignment left it without the version
-                // tag (measured: the index was skipped entirely on 1.21.7).
-                OptifinePack.forgeVersion = info == null ? "" : info.forgeVersion;
-                pack = OptifinePack.prepare(gameDir, optifineJar, baseJar, mapping, remapEnabled,
-                        info == null ? "" : info.mcVersion, NOTES);
-                NOTES.append(pack.summary()).append('\n');
-            } catch (Throwable t) {
-                NOTES.append("OptiForge failed to prepare the pack: ").append(t).append('\n');
-                t.printStackTrace(System.out);
-            }
-            finish();
-            return pack;
-        }
-    }
-
-    private static void finish() {
-        String text;
-        synchronized (NOTES) {
-            text = NOTES.toString();
-        }
-        System.out.println("[OptiForge] " + text.replace("\n", "\n[OptiForge] "));
-        if (reportFile != null) {
-            try {
-                Files.createDirectories(reportFile.getParent());
-                Files.writeString(reportFile, text, StandardCharsets.UTF_8);
-            } catch (IOException e) {
-                System.out.println("[OptiForge] could not write " + reportFile + ": " + e);
-            }
-        }
+        return Bootstrap.ensurePack(environment);
     }
 
     /**
@@ -213,13 +91,12 @@ public final class OptiForgeService implements ITransformationService {
             System.out.println("[OptiForge] parent module discovery failed: " + t);
         }
     }
+
     /**
      * Installs the module reads the first time a class is actually transformed: the GAME layer (which
-     * owns the minecraft module) does not exist yet when initialize()/onLoad() run, so the earlier
-     * attempt reported "could not identify the game module".
+     * owns the minecraft module) does not exist yet when initialize()/onLoad() run.
      */
     static void ensureModuleReads() {
-        if (!READS_INSTALLED.compareAndSet(false, true)) return;
         IEnvironment env = environment;
         if (env == null) {
             System.out.println("[OptiForge] module reads: no environment captured");
@@ -240,9 +117,8 @@ public final class OptiForgeService implements ITransformationService {
             System.out.println("[OptiForge] transformers(): no pack prepared, nothing to transform");
             return List.of();
         }
-        if (transformer == null) {
-            transformer = new OptifineClassTransformer(current);
-        }
+        OptifineClassTransformer transformer = Bootstrap.transformer();
+        if (transformer == null) return List.of();
         System.out.println("[OptiForge] transformers(): " + current.patchedClasses.size()
                 + " target classes, " + current.ownClasses.size() + " own classes");
         return List.of(transformer);
@@ -271,19 +147,13 @@ public final class OptiForgeService implements ITransformationService {
             throws IncompatibleEnvironmentException {
         OptifinePack current = ensurePack();
         System.out.println("[OptiForge] onLoad, alongside " + otherServices
-                + (transformer == null ? " (no transformer)" : " (transformer applied to "
-                + transformer.appliedCount() + " classes so far)"));
+                + (current == null ? " (no pack)" : " (pack " + current.key + ")"));
         // OptiFine patches reference Forge classes directly; the game module has to be able to read
         // the Forge modules for those references to resolve (see ModuleReads).
         try {
             String outcome = ModuleReads.install(environment);
             System.out.println("[OptiForge] " + outcome);
-            if (reportFile != null) {
-                java.nio.file.Files.createDirectories(reportFile.getParent());
-                java.nio.file.Files.writeString(reportFile, outcome + System.lineSeparator(),
-                        java.nio.charset.StandardCharsets.UTF_8,
-                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
-            }
+            Bootstrap.appendReport(outcome);
         } catch (Throwable t) {
             System.out.println("[OptiForge] module reads failed: " + t);
         }
@@ -296,10 +166,10 @@ public final class OptiForgeService implements ITransformationService {
     }
 
     public Optional<RuntimeInfo> lastEnvironment() {
-        return Optional.ofNullable(info);
+        return Optional.ofNullable(Bootstrap.info());
     }
 
     public Optional<OptifinePack> pack() {
-        return Optional.ofNullable(pack);
+        return Optional.ofNullable(Bootstrap.pack());
     }
 }

@@ -1,6 +1,7 @@
 package kynarain.cn.optiforge;
 
 import java.awt.Desktop;
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Method;
 import java.nio.file.Path;
 
@@ -89,7 +90,7 @@ public final class Notice {
             Object body = literal(componentType, message);
             Object close = literal(componentType, "关闭 / Close");
             Object open = literal(componentType, "打开 optiforge 文件夹");
-            for (var constructor : screenClass.getConstructors()) {
+            for (Constructor<?> constructor : screenClass.getConstructors()) {
                 Class<?>[] types = constructor.getParameterTypes();
                 if (types.length < 3 || !types[0].isInterface()) continue;
                 boolean components = true;
@@ -132,11 +133,11 @@ public final class Notice {
     private static Path gameDirectory() {
         try {
             String value = System.getProperty("optiforge.gameDir");
-            if (value != null && !value.isBlank()) return Path.of(value);
+            if (value != null && !value.trim().isEmpty()) return java.nio.file.Paths.get(value);
         } catch (Throwable ignored) {
             // fall through
         }
-        return Path.of(".");
+        return java.nio.file.Paths.get(".");
     }
 
     // ---- toast fallback ----

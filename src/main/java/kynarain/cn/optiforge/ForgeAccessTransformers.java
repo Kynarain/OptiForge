@@ -8,6 +8,7 @@ import org.objectweb.asm.tree.MethodNode;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -49,37 +50,119 @@ public final class ForgeAccessTransformers {
         final int access;
         /** Forge's "-f" suffix means "and drop final"; {@code protected-f} is what Forge uses for setupState. */
         final boolean clearFinal;
+        /**
+         * True for Forge's {@code protected <class> *} / {@code public <class> *} wildcard lines: "every
+         * member of this class". 1.14.4 and 1.15.2 grant the whole {@code IngameGui} that way, and without
+         * it {@code ForgeIngameGui} died on {@code IllegalAccessError ... IngameGui.field_73839_d} even
+         * though the config looked complete. A wildcard is applied as a widening only: OptiFine adds members
+         * to the same class that its own classes call, and narrowing those back to protected would break
+         * those callers.
+         */
+        final boolean wildcard;
 
         Grant(String member, String descriptor, int access, boolean clearFinal) {
             this.member = member;
             this.descriptor = descriptor;
             this.access = access;
             this.clearFinal = clearFinal;
+            this.wildcard = "*".equals(member);
         }
     }
 
+    /**
+     * Loads every access-transformer config this launch uses.
+     *
+     * <p>Only the running line's configs are read: the launch jar list (class/module path) restricted to
+     * the running version, plus the library jars of {@code net/minecraftforge/forge/<mc>-<forge>/}, plus
+     * any {@code <game>/mods/*.jar} that carries {@code META-INF/accesstransformer.cfg} (Forge 1.15+
+     * reads mod ATs through the same file). Scanning every Forge version under a shared rig was measured
+     * to apply a 1.14/1.15 grant to a 1.16.5 class: {@code protected ... ModelBakery field_177606_o}
+     * narrowed a field that 1.16.5's own config does not mention (vanilla already public), and the first
+     * model bake died with {@code IllegalAccessError ... bakeHelper}. Forge's runtime AT plugin reads the
+     * same cfg format (old {@code net.minecraftforge.fml.common.asm.transformers.AccessTransformer}), so
+     * the replay must mirror exactly this line's files.
+     */
     public static ForgeAccessTransformers load(SrgRemap remap, Path gameDir, boolean widenOnly,
+                                              String mcVersion, String forgeVersion,
                                               StringBuilder notes) {
         ForgeAccessTransformers at = new ForgeAccessTransformers();
         at.widenOnly = widenOnly;
         at.remap = remap;
         int files = 0;
         int lines = 0;
-        for (Path jar : LaunchPaths.jars(gameDir)) {
-            try (ZipFile zip = new ZipFile(jar.toFile())) {
-                ZipEntry cfg = zip.getEntry("META-INF/accesstransformer.cfg");
-                if (cfg == null) continue;
-                files++;
-                try (InputStream in = zip.getInputStream(cfg)) {
-                    lines += at.parse(new String(in.readAllBytes(), StandardCharsets.UTF_8));
+        java.util.LinkedHashSet<Path> candidates = new java.util.LinkedHashSet<>(
+                LaunchPaths.runtimeJars(gameDir, mcVersion, forgeVersion));
+        if (gameDir != null) {
+            Path mods = gameDir.resolve("mods");
+            if (Files.isDirectory(mods)) {
+                try (java.nio.file.DirectoryStream<Path> stream =
+                             Files.newDirectoryStream(mods, "*.jar")) {
+                    for (Path jar : stream) candidates.add(jar);
+                } catch (IOException ignored) {
+                    // carry on with the launch jars
                 }
-            } catch (IOException ignored) {
-                // not a readable jar
+            }
+        }
+        for (Path jar : candidates) {
+            lines += at.parseConfig(jar);
+            if (at.foundIn(jar)) files++;
+        }
+        if (files == 0) {
+            // Last resort (an unknown launcher layout): scan the full launch list but keep only entries
+            // that clearly belong to the running version, never another line.
+            String tag = (J8.isBlank(mcVersion) || J8.isBlank(forgeVersion))
+                    ? "" : mcVersion + "-" + forgeVersion;
+            for (Path jar : LaunchPaths.jars(gameDir)) {
+                if (candidates.contains(jar)) continue;
+                String path = jar.toString().replace('\\', '/');
+                if (!tag.isEmpty() && !path.contains("/forge/" + tag + "/")
+                        && !path.contains("/versions/" + tag + "/")) {
+                    continue;
+                }
+                lines += at.parseConfig(jar);
+                if (at.foundIn(jar)) files++;
             }
         }
         notes.append("access transformers: ").append(lines).append(" grant(s) from ")
-                .append(files).append(" config file(s)\n");
+                .append(files).append(" config file(s) of the running line");
+        if (!J8.isBlank(mcVersion)) {
+            notes.append(" (").append(mcVersion);
+            if (!J8.isBlank(forgeVersion)) notes.append("-").append(forgeVersion);
+            notes.append(')');
+        }
+        notes.append('\n');
         return at;
+    }
+
+    /** Jars that actually carried a config, so the note counts files rather than candidates. */
+    private final java.util.Set<Path> configJars = new java.util.HashSet<>();
+
+    private boolean foundIn(Path jar) {
+        return configJars.contains(jar);
+    }
+
+    /** Parses one jar's config; returns the number of grant lines read. */
+    private int parseConfig(Path jar) {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            ZipEntry cfg = zip.getEntry("META-INF/accesstransformer.cfg");
+            if (cfg == null) return 0;
+            configJars.add(jar);
+            try (InputStream in = zip.getInputStream(cfg)) {
+                return parse(new String(J8.readAll(in), StandardCharsets.UTF_8));
+            }
+        } catch (IOException ignored) {
+            // not a readable jar
+        }
+        return 0;
+    }
+
+    /** Maps one access-transformer keyword to ASM access bits, or -1 for an unknown keyword. */
+    private static int accessFor(String accessName) {
+        if ("public".equals(accessName) || "public-f".equals(accessName)) return Opcodes.ACC_PUBLIC;
+        if ("protected".equals(accessName) || "protected-f".equals(accessName)) return Opcodes.ACC_PROTECTED;
+        if ("private".equals(accessName) || "private-f".equals(accessName)) return Opcodes.ACC_PRIVATE;
+        if ("fdefault".equals(accessName) || "fdefault-f".equals(accessName)) return 0;
+        return -1;
     }
 
     private int parse(String text) {
@@ -100,13 +183,7 @@ public final class ForgeAccessTransformers {
             // ModelContext", because Forge declares "public net.minecraft...ModelDiscovery$ModelWrapper".
             if (parts.length == 2) {
                 String accessName = parts[0];
-                int access = switch (accessName) {
-                    case "public", "public-f" -> Opcodes.ACC_PUBLIC;
-                    case "protected", "protected-f" -> Opcodes.ACC_PROTECTED;
-                    case "private", "private-f" -> Opcodes.ACC_PRIVATE;
-                    case "fdefault", "fdefault-f" -> 0;
-                    default -> -1;
-                };
+                int access = accessFor(accessName);
                 if (access < 0) continue;
                 String classNameOnly = parts[1].replace('/', '.');
                 grants.computeIfAbsent(classNameOnly, k -> new ArrayList<>())
@@ -116,13 +193,7 @@ public final class ForgeAccessTransformers {
             }
             if (parts.length < 3) continue;
             String accessName = parts[0];
-            int access = switch (accessName) {
-                case "public", "public-f" -> Opcodes.ACC_PUBLIC;
-                case "protected", "protected-f" -> Opcodes.ACC_PROTECTED;
-                case "private", "private-f" -> Opcodes.ACC_PRIVATE;
-                case "fdefault", "fdefault-f" -> 0;
-                default -> -1;
-            };
+            int access = accessFor(accessName);
             if (access < 0) continue;
             boolean clearFinal = accessName.endsWith("-f");
             String className = parts[1].replace('/', '.');
@@ -138,6 +209,13 @@ public final class ForgeAccessTransformers {
                 member = member.substring(0, paren);
             } else if (parts.length >= 4) {
                 descriptor = parts[3];
+            }
+            if (member.equals("*")) {
+                // Wildcard: "every member of this class". No remapping, no descriptor.
+                grants.computeIfAbsent(className, k -> new ArrayList<>())
+                        .add(new Grant("*", "", access, clearFinal));
+                count++;
+                continue;
             }
             if (remap != null) {
                 String official = remap.officialName(member);
@@ -165,20 +243,21 @@ public final class ForgeAccessTransformers {
         for (Grant grant : list) {
             if (grant.member.isEmpty()) {
                 // class-level grant: replace the visibility bits of the class itself
-                node.access = widen(node.access, grant.access, grant.clearFinal);
+                node.access = widen(node.access, grant.access, grant.clearFinal, widenOnly);
                 touched++;
                 continue;
             }
+            boolean forceWiden = widenOnly || grant.wildcard;
             for (FieldNode field : node.fields) {
-                if (!field.name.equals(grant.member)) continue;
+                if (!grant.wildcard && !field.name.equals(grant.member)) continue;
                 if (!grant.descriptor.isEmpty() && !field.desc.equals(grant.descriptor)) continue;
-                field.access = widen(field.access, grant.access, grant.clearFinal);
+                field.access = widen(field.access, grant.access, grant.clearFinal, forceWiden);
                 touched++;
             }
             for (MethodNode method : node.methods) {
-                if (!method.name.equals(grant.member)) continue;
+                if (!grant.wildcard && !method.name.equals(grant.member)) continue;
                 if (!grant.descriptor.isEmpty() && !method.desc.equals(grant.descriptor)) continue;
-                method.access = widen(method.access, grant.access, grant.clearFinal);
+                method.access = widen(method.access, grant.access, grant.clearFinal, forceWiden);
                 touched++;
             }
         }
@@ -188,12 +267,12 @@ public final class ForgeAccessTransformers {
         return writer.toByteArray();
     }
 
-    private int widen(int access, int newAccess, boolean clearFinal) {
+    private int widen(int access, int newAccess, boolean clearFinal, boolean forceWidenOnly) {
         int visibilityMask = Opcodes.ACC_PUBLIC | Opcodes.ACC_PROTECTED | Opcodes.ACC_PRIVATE;
         int requested = newAccess & visibilityMask;
         int current = access & visibilityMask;
         int effective = newAccess;
-        if (widenOnly && requested != 0 && current != 0) {
+        if (forceWidenOnly && requested != 0 && current != 0) {
             // Keep the member as visible as it already is: a narrowing line must not make a same-package
             // caller fail. Widening lines still apply, and "-f" is still honoured.
             effective = current == Opcodes.ACC_PUBLIC ? Opcodes.ACC_PUBLIC

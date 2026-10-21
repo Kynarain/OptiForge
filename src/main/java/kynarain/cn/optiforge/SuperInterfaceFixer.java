@@ -37,8 +37,9 @@ public final class SuperInterfaceFixer {
         if (node.interfaces == null) node.interfaces = new ArrayList<>();
         List<String> added = new ArrayList<>();
         for (MethodNode method : node.methods) {
-            for (AbstractInsnNode instruction : method.instructions) {
-                if (!(instruction instanceof MethodInsnNode call)) continue;
+            for (AbstractInsnNode instruction : method.instructions.toArray()) {
+                if (!(instruction instanceof MethodInsnNode)) continue;
+                MethodInsnNode call = (MethodInsnNode) instruction;
                 if (call.getOpcode() != Opcodes.INVOKESPECIAL || !call.itf) continue;
                 String owner = call.owner;
                 if (node.interfaces.contains(owner) || added.contains(owner)) continue;

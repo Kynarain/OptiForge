@@ -36,21 +36,38 @@ public final class PatchApply {
 
         for (int i = 0; i < args.length; i++) {
             switch (args[i]) {
-                case "--optifine" -> optifine = Paths.get(args[++i]);
-                case "--base" -> base = Paths.get(args[++i]);
-                case "--class" -> one = args[++i];
-                case "--out" -> out = Paths.get(args[++i]);
-                case "--map" -> map = Paths.get(args[++i]);
-                case "--all" -> all = true;
-                case "--namespace" -> namespace = true;
-                case "--sample" -> sample = Integer.parseInt(args[++i]);
-                case "--help", "-h" -> {
+                case "--optifine":
+                    optifine = Paths.get(args[++i]);
+                    break;
+                case "--base":
+                    base = Paths.get(args[++i]);
+                    break;
+                case "--class":
+                    one = args[++i];
+                    break;
+                case "--out":
+                    out = Paths.get(args[++i]);
+                    break;
+                case "--map":
+                    map = Paths.get(args[++i]);
+                    break;
+                case "--all":
+                    all = true;
+                    break;
+                case "--namespace":
+                    namespace = true;
+                    break;
+                case "--sample":
+                    sample = Integer.parseInt(args[++i]);
+                    break;
+                case "--help":
+                case "-h":
                     System.out.println("usage: PatchApply --optifine <jar> --base <jar> "
                             + "(--class <logical> [--out <file>] [--map <srg-to-official.tsv>] "
                             + "| --all | --namespace [--sample n])");
                     return;
-                }
-                default -> throw new IllegalArgumentException("unknown argument: " + args[i]);
+                default:
+                    throw new IllegalArgumentException("unknown argument: " + args[i]);
             }
         }
         if (optifine == null || base == null || (!all && !namespace && one == null)) {
@@ -69,9 +86,15 @@ public final class PatchApply {
                 for (String failure : stats.failures) {
                     System.out.println("  failed: " + failure);
                 }
-                System.out.println("RESULT   : " + (stats.srg()
-                        ? "SRG member names - needs an SRG->official remap on an official-name runtime"
-                        : "official member names - usable as-is on an official-name runtime"));
+                String verdict;
+                if (stats.srg()) {
+                    verdict = "SRG member names - needs an SRG->official remap on an official-name runtime";
+                } else if (stats.mcp()) {
+                    verdict = "MCP/SRG func_/field_ names - matches the 1.14-1.16 Forge runtime, no remap";
+                } else {
+                    verdict = "official member names - usable as-is on an official-name runtime";
+                }
+                System.out.println("RESULT   : " + verdict);
                 return;
             }
 
