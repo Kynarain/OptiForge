@@ -1362,3 +1362,16 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
 - 1.9x–1.11x 未测，但形态与 1.8.9/1.12.2 相同，预期同一产物可用。
 - 阶段 2 的两处未闭环：1.16.5 在 rig 上 `--server` 未触发自动连接（启动与 OptiFine 均正常）；
   1.13.2 连服务器时停在 Connecting（客户端 30 s 后被服务端记录为 Disconnected），启动与 OptiFine 正常。
+
+### 0.15.2 收尾：1.16.5 / 1.13.2 的连接问题已归因（不是 OptiForge）
+
+对照实验（同一 rig、同一服务器、`mods/` **完全清空**，只跑纯 Forge）：
+
+- **1.16.5**（Forge 36.2.39）：`--server 127.0.0.1 --port 25601` → 客户端日志里 `Connecting to` 计数 0、
+  服务器端无登录记录。装回 OptiForge 后行为一致 → 属于 Forge 1.16.5 客户端在 rig 启动参数下的自动连接限制。
+- **1.13.2**（Forge 25.0.219）：纯 Forge 也会 `Connecting to ...` 之后停在连接界面、服务器端 30 s 后
+  记为 `lost connection: Disconnected`，与装 OptiForge 时完全相同 → 同一环境问题。
+
+因此阶段 2 的可验证结论是：**四条线（1.13.2 / 1.14.4 / 1.15.2 / 1.16.5）都能在 Java 8 上启动并接管 OptiFine，
+0 崩溃**；其中 1.14.4 与 1.15.2 进服务器世界成功，1.16.5 与 1.13.2 因 rig 环境限制无法复现自动连接，
+但对照实验排除了 OptiForge 的嫌疑。
