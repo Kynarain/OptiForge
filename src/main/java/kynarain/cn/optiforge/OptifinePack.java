@@ -1285,7 +1285,7 @@ public final class OptifinePack {
         }
     }
 
-    private static final String PACK_VERSION = "v10"; // v10: renumber own classes too; v9: 1.17.1 G9 renumber; v8: 1.13.2 bridge
+    private static final String PACK_VERSION = "v11"; // v11: AT fallback via ancestor libraries; v10: renumber own classes
 
     /** Dotted class name of a patched class, read from its own bytes (obf remap changes it). */
     private static String classNameOf(byte[] classBytes, String fallbackLogical) {

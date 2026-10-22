@@ -140,6 +140,31 @@ public final class ForgeAccessTransformers {
                 if (at.foundIn(jar)) files++;
             }
         }
+        if (files == 0) {
+            // PCL-style instance folders keep the game directory under versions/<id>/, so the library root is
+            // an ANCESTOR of gameDir and neither the module path nor the class path names the Forge jar.
+            // Measured on 1.13.2 in such a folder: 0 grants -> the first HUD frame died with
+            // IllegalAccessError GuiIngameForge -> GuiIngame.field_73839_d.
+            String tag = (J8.isBlank(mcVersion) || J8.isBlank(forgeVersion))
+                    ? "" : mcVersion + "-" + forgeVersion;
+            if (!tag.isEmpty()) {
+                for (Path root = gameDir; root != null; root = root.getParent()) {
+                    Path dir = root.resolve("libraries").resolve("net").resolve("minecraftforge")
+                            .resolve("forge").resolve(tag);
+                    if (!Files.isDirectory(dir)) continue;
+                    try (java.nio.file.DirectoryStream<Path> stream = Files.newDirectoryStream(dir, "*.jar")) {
+                        for (Path jar : stream) {
+                            if (candidates.contains(jar)) continue;
+                            lines += at.parseConfig(jar);
+                            if (at.foundIn(jar)) files++;
+                        }
+                    } catch (IOException ignored) {
+                        // keep looking upwards
+                    }
+                    if (files > 0) break;
+                }
+            }
+        }
         notes.append("access transformers: ").append(lines).append(" grant(s) from ")
                 .append(files).append(" config file(s) of the running line");
         if (!J8.isBlank(mcVersion)) {
