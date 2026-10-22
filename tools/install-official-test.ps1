@@ -9,7 +9,7 @@ param(
     [string]$MinecraftHome = 'C:\Users\kynar\AppData\Roaming\.minecraft',
     [string]$Rig = 'I:\mods\optifineoforge-test',
     [string]$Repo = 'I:\mods\OptiForge',
-    [string]$Version = '0.16.3'
+    [string]$Version = '1.0.0'
 )
 
 $ErrorActionPreference = 'Stop'

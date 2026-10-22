@@ -1420,3 +1420,24 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
 - 新增 `tools/install-official-test.ps1`：把 1.13.2 / 1.16.5 / 1.7.10 / 1.20.1 四条件装进官方启动器
   （版本 profile + 依赖库 + 各自独立的 gameDir + 对应产物 + OptiFine），并写入 4 个启动器档案
   `optiforge-test-<mc>`；`launcher_profiles.json` 会先备份成 `.optiforge-backup`。
+
+### 1.0.0：接口冻结与状态说明
+
+1.0.0 冻结以下内容（SemVer 语义下的稳定性承诺）：
+
+- 产物命名：`OptiForge-<版本>.jar`（1.17+）、`-oldml`（1.13.2–1.16.5）、`-legacy`（1.8.9–1.12.2）、
+  `-legacy17`（≤1.7.10）；生成物 `OptiForge-<版本>-classes.jar`（1.17+）与 `OptiForge-<版本>-optifine.jar`（旧线）。
+- 目录约定：OptiFine jar 放 `<game>/optiforge/`（不放 `mods/`），产物放 `mods/`。
+- modId `optiforge`、displayName `OptiForge`、MPL 2.0、credits `OptiFine by sp614x`、图标。
+- 配置项：`-Doptiforge.optifine`、`-Doptiforge.vanilla`、`-Doptiforge.libraries`、`-Doptiforge.assets`、
+  `-Doptiforge.renumber`、`-Doptiforge.skipClasses`、`-Doptiforge.deferVote`。
+- 打包缓存位置 `<game>/optiforge/pack/<key>/` 与版本号递增策略（PACK_VERSION 变更即失效重建）。
+
+状态（详见 README「1.0.0 的支持状态与已知限制」）：
+
+- 已进世界验证 24 条线：1.8.9/1.9.4/1.10.2/1.11.2/1.12.2/1.14.4/1.15.2/1.17.1/1.18/1.18.1/1.18.2/
+  1.19/1.19.1/1.19.2/1.19.3/1.19.4/1.20.1/1.20.6/1.21/1.21.1/1.21.6–1.21.11/26.1.2/26.2。
+- 实验性：1.16.5（`ClientWorld.getPartEntities` NPE）、1.13.2（`RenderChunkCache` NPE）——都是
+  "OptiFine 补丁类覆盖了 Forge binpatch 过的类，成员级合并够不着方法体"这一个根因，1.1.0 做方法体级合并。
+- 仅离线验证：1.7.10（真机死 Forge 1.7.10 自身的 launchwrapper CME）。
+- 不支持：OptiFine 1.17.1 G9（映射世代）、1.20.2（OptiFine 与 Forge 50 的 `ForgeGui` 冲突）。
