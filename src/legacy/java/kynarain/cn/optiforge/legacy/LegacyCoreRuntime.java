@@ -42,11 +42,13 @@ public final class LegacyCoreRuntime {
         Path gameDir = null;
         try {
             gameDir = LegacyPaths.gameDirFrom(data);
+            reportJavaMismatch(gameDir);
             server = LegacyPaths.isServer();
             if (server) {
                 // OptiFine skips its transformer on a Forge server (measured from OptiFineForgeTweaker
                 // bytecode); the payload patches client classes that are not on a server.
                 LegacyBootstrap.writeDiagnose(gameDir, "server detected, payload not built\n");
+                
                 System.out.println(TAG + " server detected, payload not built");
                 return;
             }
@@ -84,4 +86,31 @@ public final class LegacyCoreRuntime {
             return null;
         }
     }
-}
+
+    /**
+     * 1.8.9-1.12.2 (and 1.7.10) are Java 8 lines. This jar still loads on a newer JVM because it is
+     * class-file 52, but Forge on those lines is not supported there - say so once instead of leaving the
+     * user with a mysterious render or mixin failure.
+     */
+    private static void reportJavaMismatch(Path gameDir) {
+        String spec = System.getProperty("java.specification.version", "");
+        int major;
+        try {
+            major = spec.startsWith("1.") ? Integer.parseInt(spec.substring(2)) : Integer.parseInt(spec.split("\\.")[0]);
+        } catch (RuntimeException e) {
+            return;
+        }
+        if (major > 8) {
+            String warning = TAG + " WARNING: 1.8.9-1.12.2 Forge only supports Java 8, but this runtime is Java "
+                    + major + "; switch the instance's Java to 8 if anything looks wrong";
+            System.out.println(warning);
+            try {
+                java.nio.file.Files.write(
+                        LegacyPaths.optiforgeDir(gameDir).resolve("diagnose-legacy.txt"),
+                        (warning + "\n").getBytes(java.nio.charset.StandardCharsets.UTF_8),
+                        java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+            } catch (Throwable ignored) {
+                // the log line above is the useful part
+            }
+        }
+    }}

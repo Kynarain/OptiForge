@@ -148,6 +148,11 @@ public final class OptiForgeService implements ITransformationService {
         OptifinePack current = ensurePack();
         System.out.println("[OptiForge] onLoad, alongside " + otherServices
                 + (current == null ? " (no pack)" : " (pack " + current.key + ")"));
+        // Wrong artifact or wrong Java for this line: say which one is needed instead of letting the
+        // failure surface later as a missing class or an access error.
+        RuntimeInfo info = Bootstrap.info();
+        String mc = info == null ? null : info.mcVersion;
+        JarGuide.check(null, "jdk17", mc, 17);
         // OptiFine patches reference Forge classes directly; the game module has to be able to read
         // the Forge modules for those references to resolve (see ModuleReads).
         try {

@@ -122,6 +122,28 @@ stderr 0 字节，且 OptiFine 自己打印 `Forge version: 5x`。其余版本�
 注意：1.13–1.16 的运行时是**官方类名 + `func_`/`field_` 成员名**，1.12.2 是**混淆类名 + 混淆成员名**，
 两条管线因此分开；主产物的 Java 17 代码与它们共享同一套补丁/合并逻辑。
 
+## 选错 jar / 选错 Java 会怎样
+
+加载机制决定用哪个产物，Java 版本由版本线决定（1.13–1.16 只支持 Java 8）：
+
+| 版本线 | 正确的产物 | 需要的 Java |
+|---|---|---|
+| 1.17 – 20.4 | `OptiForge-<版本>.jar` | 17 |
+| 1.20.5 / 1.20.6 / 1.21.x | `OptiForge-<版本>.jar` | 21 |
+| 26.x | `OptiForge-<版本>.jar` | 25 |
+| 1.13.2 – 1.16.5 | `OptiForge-<版本>-oldml.jar` | 8 |
+| 1.8.9 – 1.12.2 | `OptiForge-<版本>-legacy.jar` | 8 |
+| ≤ 1.7.10 | `OptiForge-<版本>-legacy17.jar` | 8 |
+
+放错时不会静默失败：旧线的产物启动时会自己检查，日志里直接写清楚，例如
+
+```
+[OptiForge] WARNING: this oldml artifact targets Java 8 and the runtime is Java 17; Forge for 1.13-1.16
+            is only supported on Java 8, so switch the instance's Java to 8 if anything looks wrong
+```
+
+（正确组合不会打印任何 WARNING，已实测 1.15.2 + Java 8 + `-oldml` 为 0 条。）
+
 ## 它在做什么（详见 [docs/DESIGN.md](docs/DESIGN.md)）
 
 Forge 不把 OptiFine 当 mod：`mods/` 里任何声明了 `cpw.mods.modlauncher.api.ITransformationService`

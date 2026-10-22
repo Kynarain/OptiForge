@@ -5,6 +5,8 @@ import cpw.mods.modlauncher.api.ITransformationService;
 import cpw.mods.modlauncher.api.ITransformer;
 import cpw.mods.modlauncher.api.IncompatibleEnvironmentException;
 import kynarain.cn.optiforge.Bootstrap;
+import kynarain.cn.optiforge.JarGuide;
+import kynarain.cn.optiforge.RuntimeInfo;
 import kynarain.cn.optiforge.OptifineClassTransformer;
 import kynarain.cn.optiforge.OptifinePack;
 
@@ -70,6 +72,10 @@ public final class OldModLauncherService implements ITransformationService {
         OptifinePack current = Bootstrap.ensurePack(environment);
         System.out.println("[OptiForge] onLoad (oldml/Java 8), alongside " + otherServices
                 + (current == null ? " (no pack)" : " (pack " + current.key + ")"));
+        // This artifact belongs to 1.13.2-1.16.5 and is compiled for Java 8. If it is running on a newer
+        // JVM or a line that wants another artifact, name the right pair instead of failing later.
+        RuntimeInfo info = Bootstrap.info();
+        JarGuide.check(null, "oldml", info == null ? null : info.mcVersion, 8);
 
         if (current == null) {
             System.out.println("[OptiForge] NOT ACTIVE: no pack was prepared - see optiforge/diagnose.txt");

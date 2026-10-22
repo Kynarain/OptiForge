@@ -1401,3 +1401,13 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
   并在 rig 这类非标准布局下用 `-Doptiforge.libraries=<libraries>` 兜底。
 - 验证：1.17.1 + H1 重新 480 条授权 / 37 个类重放 AT、0 崩溃；
   `-Doptiforge.assets` 默认 staged 下 1.15.2 也正常（1621 个载荷资产、atlas 完成、0 崩溃）。
+
+### 0.16.2：选错 jar / 选错 Java 的自检
+
+- 新增 `JarGuide`（共享、Java 8 干净）：读 `java.specification.version` 与 MC 版本，判断"这个产物是不是本线的"，
+  不匹配就打 `[OptiForge] WARNING: ...` 并写进 diagnose。
+- 主产物（jdk17）在 `onLoad` 检查；`-oldml` 在 `onLoad` 检查；`-legacy`/`-legacy17` 在 coremod `injectData` 开头检查
+  （后者写 `optiforge/diagnose-legacy.txt`）。
+- 实测：1.15.2 上故意用 Java 17 → 打出
+  `WARNING: this oldml artifact targets Java 8 and the runtime is Java 17; Forge for 1.13-1.16 is only supported on Java 8 ...`；
+  正确组合（1.15.2 + Java 8 + `-oldml`）→ **0 条 WARNING**，启动正常。
