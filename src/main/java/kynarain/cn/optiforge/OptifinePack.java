@@ -1005,6 +1005,28 @@ public final class OptifinePack {
         return !(mode.equals("none") || mode.equals("off") || mode.equals("false"));
     }
 
+    /**
+     * Pre-launch hint for the first launch with a given OptiFine jar: the CTM texture payloads have to be
+     * materialised once, and on 1.13-1.16 OptiFine then compiles the default CTM set on the first resource
+     * reload (measured about 245 s on 1.16.5). Printing this before the work starts stops users from killing
+     * a client that looks hung, and names the opt-out.
+     */
+    private static void announceFirstStaging(Path cacheRoot) {
+        try {
+            if (cacheRoot != null
+                    && java.nio.file.Files.isRegularFile(cacheRoot.resolve("assets").resolve("payload-count.txt"))) {
+                return;
+            }
+        } catch (RuntimeException ignored) {
+            // fall through: a repeated message is harmless
+        }
+        System.out.println("[OptiForge] first launch with this OptiFine jar: staging its CTM texture payloads now;"
+                + " on 1.13-1.16 the first resource reload can take a few minutes (cached afterwards)."
+                + " -Doptiforge.assets=none skips staging if you do not need connected textures.");
+        Bootstrap.appendReport("first launch: staging OptiFine CTM texture payloads (one-time;"
+                + " -Doptiforge.assets=none skips)");
+    }
+
     private static void ensureAssetPayloads(Path gameDir, Path cacheRoot, Path optifineJar,
                                             StringBuilder notes) {
         if (!stagedAssetsEnabled()) return;
@@ -1061,6 +1083,7 @@ public final class OptifinePack {
                                         Path optifineJar, Path cacheRoot, StringBuilder notes) throws IOException {
         boolean stagePayloads = stagedAssetsEnabled();
         if (stagePayloads) {
+            announceFirstStaging(cacheRoot);
             ensureAssetPayloads(gameDir, cacheRoot, optifineJar, notes);
         } else {
             notes.append("OptiFine asset payloads: disabled (-Doptiforge.assets=none); plain assets/ only\n");

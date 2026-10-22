@@ -1411,3 +1411,12 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
 - 实测：1.15.2 上故意用 Java 17 → 打出
   `WARNING: this oldml artifact targets Java 8 and the runtime is Java 17; Forge for 1.13-1.16 is only supported on Java 8 ...`；
   正确组合（1.15.2 + Java 8 + `-oldml`）→ **0 条 WARNING**，启动正常。
+
+### 0.16.3：首启提示 + 官方启动器测试包
+
+- **staged 首启提示**：第一次用某个 OptiFine jar 启动、需要解纹理载荷时，控制台会先打
+  `[OptiForge] first launch with this OptiFine jar: staging its CTM texture payloads now; on 1.13-1.16 the first resource reload can take a few minutes (cached afterwards). -Doptiforge.assets=none skips staging ...`
+  并写进 `optiforge/diagnose.txt`，避免用户以为客户端卡死。
+- 新增 `tools/install-official-test.ps1`：把 1.13.2 / 1.16.5 / 1.7.10 / 1.20.1 四条件装进官方启动器
+  （版本 profile + 依赖库 + 各自独立的 gameDir + 对应产物 + OptiFine），并写入 4 个启动器档案
+  `optiforge-test-<mc>`；`launcher_profiles.json` 会先备份成 `.optiforge-backup`。
