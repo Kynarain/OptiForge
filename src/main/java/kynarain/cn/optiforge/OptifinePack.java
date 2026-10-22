@@ -1285,7 +1285,7 @@ public final class OptifinePack {
         }
     }
 
-    private static final String PACK_VERSION = "v11"; // v11: AT fallback via ancestor libraries; v10: renumber own classes
+    private static final String PACK_VERSION = "v12"; // v12: own-class hierarchy prepass (1.13.2 field ids); v11: AT fallback
 
     /** Dotted class name of a patched class, read from its own bytes (obf remap changes it). */
     private static String classNameOf(byte[] classBytes, String fallbackLogical) {
@@ -1313,7 +1313,13 @@ public final class OptifinePack {
                         + " renamed into the Forge runtime namespace\n");
                 return null;
             }
-            return ObfNamespaceRemap.load(in, baseJar);
+            ObfNamespaceRemap remap = ObfNamespaceRemap.load(in, baseJar);
+            // Register OptiFine's own hierarchy before any class is remapped, so game classes that reference
+            // an own-class field resolve the same id the own class' declaration gets (see preloadHierarchy).
+            try (java.util.zip.ZipFile jar = new java.util.zip.ZipFile(optifineJar.toFile())) {
+                remap.preloadHierarchy(jar, "net/optifine/");
+            }
+            return remap;
         } catch (Exception e) {
             notes.append("could not load the obf->runtime mapping: ").append(e).append('\n');
             return null;

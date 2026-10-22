@@ -183,6 +183,34 @@ public final class ObfNamespaceRemap {
         }
     }
 
+    /**
+     * Registers the super class and interfaces of every OptiFine-owned class in the jar BEFORE any class is
+     * remapped. Without this the resolution outcome depends on remap order: on 1.13.2 the patched
+     * {@code RenderChunk} referenced {@code net.optifine.render.AabbFrame.a} while AabbFrame had not been
+     * inspected yet, so the reference kept the obf name, and once AabbFrame was remapped its declaration got
+     * the inherited field id instead -> the first chunk render died with NoSuchFieldError: a.
+     */
+    public void preloadHierarchy(java.util.zip.ZipFile jar, String prefix) {
+        java.util.Enumeration<? extends java.util.zip.ZipEntry> entries = jar.entries();
+        while (entries.hasMoreElements()) {
+            java.util.zip.ZipEntry entry = entries.nextElement();
+            String name = entry.getName();
+            if (!name.startsWith(prefix) || !name.endsWith(".class")) continue;
+            try (java.io.InputStream in = jar.getInputStream(entry)) {
+                ClassNode node = new ClassNode();
+                new ClassReader(J8.readAll(in)).accept(node,
+                        ClassReader.SKIP_CODE | ClassReader.SKIP_DEBUG | ClassReader.SKIP_FRAMES);
+                if (node.name == null || superMap.containsKey(node.name)) continue;
+                if (node.superName != null) superMap.put(node.name, node.superName);
+                if (node.interfaces != null && !node.interfaces.isEmpty()) {
+                    interfaceMap.put(node.name, new ArrayList<>(node.interfaces));
+                    interfaceNames.addAll(node.interfaces);
+                }
+            } catch (Exception ignored) {
+                // a class we cannot read simply stays unregistered; the resolver falls back to the table
+            }
+        }
+    }
     public byte[] remap(byte[] classBytes) {
         ClassNode probe = new ClassNode();
         new ClassReader(classBytes).accept(probe,
