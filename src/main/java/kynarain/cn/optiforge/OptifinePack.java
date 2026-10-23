@@ -775,9 +775,15 @@ public final class OptifinePack {
         if (!J8.isBlank(skip)) {
             for (String name : skip.split(",")) {
                 String trimmed = name.trim();
-                if (!trimmed.isEmpty() && patched.remove(trimmed) != null) {
-                    notes.append("skipped (per -Doptiforge.skipClasses): ").append(trimmed).append('\n');
-                    System.out.println("[OptiForge] skipped " + trimmed);
+                if (trimmed.isEmpty()) continue;
+                // The pack keys the classes by binary name; accept the internal form too so a hand-typed
+                // -Doptiforge.skipClasses=net/minecraft/... entry works instead of silently doing nothing.
+                String dotted = trimmed.replace('/', '.');
+                String internal = trimmed.replace('.', '/');
+                if (patched.remove(dotted) == null) patched.remove(internal);
+                if (!patched.containsKey(dotted) && !patched.containsKey(internal)) {
+                    notes.append("skipped (per -Doptiforge.skipClasses): ").append(dotted).append('\n');
+                    System.out.println("[OptiForge] skipped " + dotted);
                 }
             }
         }
