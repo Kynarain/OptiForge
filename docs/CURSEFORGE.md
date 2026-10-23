@@ -54,7 +54,7 @@ CurseForge 上已有同类做法（OptiFabric、Connector 等"需要用户自备
 生成方式：
 
 ```powershell
-pwsh -File tools\make-curseforge-dist.ps1 -Version 1.0.1
+pwsh -File tools\make-cf-bundle.ps1 -Version 1.0.1
 ```
 
 产物在 `dist/cf/`：

@@ -1,4 +1,9 @@
-﻿# CurseForge upload list 鈥?OptiForge Reforged 1.0.1  One file per Minecraft version, named `<Project>-<SemVer>+mc<Minecraft version>.jar` (same convention as OptiFabric Reforged). Upload each row as its own CurseForge file and tick only that Minecraft version.  | # | File | Release type | Minecraft | Forge | Example OptiFine build | Java | Changelog | |---|---|---|---|---|---|---|---|
+# CurseForge upload list - OptiForge Reforged 1.0.1
+
+One file per Minecraft version, named `OptiForge-Reforged-<SemVer>+mc<Minecraft version>.jar` (same convention as OptiFabric Reforged). Upload each row as its own CurseForge file and tick only that Minecraft version.
+
+| # | File | Release type | Minecraft | Forge | Example OptiFine build | Java | Changelog |
+|---|---|---|---|---|---|---|---|
 | 1 | `OptiForge-Reforged-1.0.1+mc1.17.1.jar` | Release | 1.17.1 | 37.0.103 | 1.17.1 HD_U_H1 | 17 | `changelog-1.17-26.md` |
 | 2 | `OptiForge-Reforged-1.0.1+mc1.18.jar` | Release | 1.18 | 38.0.14 | 1.18 HD_U_H3 | 17 | `changelog-1.17-26.md` |
 | 3 | `OptiForge-Reforged-1.0.1+mc1.18.1.jar` | Release | 1.18.1 | 39.1.0 | 1.18.1 HD_U_H6 | 17 | `changelog-1.17-26.md` |

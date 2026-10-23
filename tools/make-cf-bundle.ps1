@@ -2,8 +2,7 @@
 #
 # Naming follows the OptiFabric Reforged convention: <Project>-<SemVer>+mc<Minecraft version>.jar, one file per
 # Minecraft version. OptiForge's four artifacts each cover a range of versions, so the range artifacts are copied
-# (hard-linked when possible) once per verified Minecraft version; CurseForge then lists one file per game version,
-# which is what users expect from a project named "... Reforged".
+# (hard-linked when possible) once per verified Minecraft version, and CurseForge lists one file per game version.
 #
 # Only versions verified in this project are emitted. 1.16.5 and 1.13.2 start and load OptiFine but can crash when
 # entering a world, so they are marked Beta; 1.7.10 is Alpha.
@@ -15,8 +14,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$nl = [Environment]::NewLine
 
-# mc, artifact key, forge, optifine example, release type
 $lines = @(
     @{ mc = '1.17.1'; kind = 'main'; forge = '37.0.103';   of = '1.17.1 HD_U_H1';        type = 'Release' },
     @{ mc = '1.18';   kind = 'main'; forge = '38.0.14';    of = '1.18 HD_U_H3';          type = 'Release' },
@@ -63,18 +62,16 @@ $changelogs = @{
     legacy   = 'changelog-1.8-1.12.md'
     legacy17 = 'changelog-1.7.10.md'
 }
-
-foreach ($entry in $sources.Values) {
-    if (-not (Test-Path $entry)) { throw "missing build output: $entry" }
+foreach ($source in $sources.Values) {
+    if (-not (Test-Path $source)) { throw "missing build output: $source" }
 }
 
 New-Item -ItemType Directory -Force -Path $OutDirectory | Out-Null
 Get-ChildItem $OutDirectory -Filter '*.jar' -ErrorAction SilentlyContinue | Remove-Item -Force
 
-function Java-For([string]$kind, [string]$mc) {
+function Get-JavaFor([string]$kind, [string]$mc) {
     if ($kind -ne 'main') { return '8' }
     if ($mc -like '26.*') { return '25' }
-    # 1.20.5+ and 1.21.x run on Java 21; 1.17 - 1.20.4 on 17
     $parts = $mc.Split('.')
     $minor = [int]$parts[1]
     if ($minor -eq 20 -and $parts.Count -gt 2 -and [int]$parts[2] -ge 5) { return '21' }
@@ -82,7 +79,7 @@ function Java-For([string]$kind, [string]$mc) {
     return '17'
 }
 
-$manifest = @()
+$manifest = New-Object System.Collections.Generic.List[object]
 foreach ($line in $lines) {
     $source = $sources[$line.kind]
     $target = Join-Path $OutDirectory "$Project-$Version+mc$($line.mc).jar"
@@ -92,39 +89,43 @@ foreach ($line in $lines) {
     } catch {
         Copy-Item $source $target -Force
     }
-    $hash = (Get-FileHash $target -Algorithm SHA256).Hash.ToLower()
-    $manifest += [pscustomobject]@{
-        mc = $line.mc
-        file = [System.IO.Path]::GetFileName($target)
-        bytes = (Get-Item $target).Length
-        sha256 = $hash
-        release = $line.type
-        forge = $line.forge
-        optifine = $line.of
-        java = (Java-For $line.kind $line.mc)
-        artifact = "OptiForge-$Version-$($line.kind)" 
+    $manifest.Add([pscustomobject]@{
+        mc        = $line.mc
+        file      = [System.IO.Path]::GetFileName($target)
+        bytes     = (Get-Item $target).Length
+        sha256    = (Get-FileHash $target -Algorithm SHA256).Hash.ToLower()
+        release   = $line.type
+        forge     = $line.forge
+        optifine  = $line.of
+        java      = (Get-JavaFor $line.kind $line.mc)
+        artifact  = "OptiForge-$Version-$($line.kind)"
         changelog = $changelogs[$line.kind]
-    }
+    })
 }
 
 $manifestPath = Join-Path $OutDirectory 'upload-manifest.csv'
 $manifest | Export-Csv -Path $manifestPath -NoTypeInformation -Encoding UTF8
 
-$md = @('# CurseForge upload list — OptiForge Reforged ' + $Version, '',
-        'One file per Minecraft version, named `<Project>-<SemVer>+mc<Minecraft version>.jar` ' +
-        '(same convention as OptiFabric Reforged). Upload each row as its own CurseForge file and tick only that ' +
-        'Minecraft version.', '',
-        '| # | File | Release type | Minecraft | Forge | Example OptiFine build | Java | Changelog |',
-        '|---|---|---|---|---|---|---|---|')
-$i = 0
+# upload-list.md is assembled line by line so nothing can collapse the header into one line
+$md = New-Object System.Collections.Generic.List[string]
+$md.Add("# CurseForge upload list - OptiForge Reforged $Version")
+$md.Add('')
+$md.Add('One file per Minecraft version, named `OptiForge-Reforged-<SemVer>+mc<Minecraft version>.jar` (same ' +
+        'convention as OptiFabric Reforged). Upload each row as its own CurseForge file and tick only that ' +
+        'Minecraft version.')
+$md.Add('')
+$md.Add('| # | File | Release type | Minecraft | Forge | Example OptiFine build | Java | Changelog |')
+$md.Add('|---|---|---|---|---|---|---|---|')
+$index = 0
 foreach ($row in $manifest) {
-    $i++
-    $md += "| $i | ``$($row.file)`` | $($row.release) | $($row.mc) | $($row.forge) | $($row.optifine) | $($row.java) | ``$($row.changelog)`` |"
+    $index++
+    $md.Add("| $index | ``$($row.file)`` | $($row.release) | $($row.mc) | $($row.forge) | " +
+            "$($row.optifine) | $($row.java) | ``$($row.changelog)`` |")
 }
-$md += ''
-$md += "Total files: $($manifest.Count). SHA-256 for every file is in ``upload-manifest.csv``."
+$md.Add('')
+$md.Add("Total files: $($manifest.Count). SHA-256 for every file is in ``upload-manifest.csv``.")
 $mdPath = Join-Path $OutDirectory 'upload-list.md'
-$md -join "`r`n" | Set-Content -Encoding UTF8 $mdPath
+[System.IO.File]::WriteAllText($mdPath, ($md -join $nl) + $nl, (New-Object System.Text.UTF8Encoding($false)))
 
 Write-Host "built $($manifest.Count) upload files in $OutDirectory"
 $manifest | Group-Object release | ForEach-Object { Write-Host ("  {0}: {1}" -f $_.Name, $_.Count) }
