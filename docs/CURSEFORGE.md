@@ -61,7 +61,13 @@ CurseForge 的"文件"是**一份 jar + 该 jar 支持的游戏版本集合**，
 
 ## 3. 项目描述（直接粘贴）
 
-用 `dist/curseforge-description.md` 的全部内容。要点已包含：
+> 描述文件三份：`curseforge-description.md` 是**中英合一的母本**（改内容改这一份），
+> `curseforge-description-en.md` 是**纯英文成品**（贴 CurseForge 用），
+> `curseforge-description-zh.md` 是**中文对照**（只看不贴）。
+> 重新拆分：`python tools/split-curseforge-description.py`。
+
+
+用 `dist/curseforge-description-en.md` 的全部内容（纯英文，直接粘贴）。中文对照见 `dist/curseforge-description-zh.md`，只给你自己看，不要贴到 CurseForge。要点已包含：
 
 - 一句话定位 + 支持矩阵 + 安装步骤（OptiFine 放 `optiforge/`，不放 `mods/`）
 - "不含 OptiFine"声明与 OptiFine 官网链接

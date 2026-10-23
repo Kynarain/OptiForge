@@ -181,7 +181,7 @@ ForgeGradle，也不需要每条线一个工程。
 
 ## 发布到 CurseForge
 
-上架材料都在 `dist/`：四份 jar、512 图标、项目描述（`curseforge-description.md`）、各文件的 changelog。
+上架材料都在 `dist/`：四份 jar、512 图标、**纯英文项目描述**（`curseforge-description-en.md`，直接粘贴）、中文对照（`curseforge-description-zh.md`，仅供自己看）、各文件的 changelog。
 完整操作步骤（项目设置、每个文件勾选哪些游戏版本、合规要点）见
 [docs/CURSEFORGE.md](docs/CURSEFORGE.md)。
 
