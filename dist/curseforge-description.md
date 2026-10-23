@@ -78,17 +78,18 @@ or a Forge dedicated server), confirm OptiFine's version banner and its `[OptiFi
 Builds that OptiFine already lists as Forge-compatible run through OptiForge as well; verified examples:
 1.16.5 `HD_U_G8`, 1.17.1 `HD_U_H1`, 1.19.3 `HD_U_I2_pre4`, 1.21.8 `HD_U_J6_pre13`.
 
-### Artifacts
+### Downloads
 
-Four artifacts. Each targets one era of Forge's mod loading mechanism, and they are not interchangeable.
+Every file is named `OptiForge-Reforged-<version>+mc<Minecraft version>.jar`; take the one whose `+mc...` part
+matches your Minecraft version. Four artifacts exist underneath (one per era of Forge's mod loading mechanism,
+not interchangeable); the per-version files carry the same content within a range.
 
-| Minecraft | File | Java |
+| File pattern | Minecraft | Java |
 |---|---|---|
-| 1.17 – 1.20.1, 1.20.6, 1.21.x, 26.1.2, 26.2 | `OptiForge-1.0.1.jar` | 17 / 21 / 25 |
-| 1.14.4, 1.15.2, 1.16.5 | `OptiForge-1.0.1-oldml.jar` | 8 |
-| 1.13.2 | `OptiForge-1.0.1-oldml.jar` | 8 |
-| 1.8.9 – 1.12.2 | `OptiForge-1.0.1-legacy.jar` | 8 |
-| 1.7.10 | `OptiForge-1.0.1-legacy17.jar` | 8 |
+| `…+mc1.17.1.jar` … `…+mc26.2.jar` | 1.17 – 1.20.1, 1.20.6, 1.21.x, 26.1.2, 26.2 | 17 / 21 / 25 |
+| `…+mc1.14.4.jar`, `…+mc1.15.2.jar`, `…+mc1.16.5.jar`, `…+mc1.13.2.jar` | 1.14.4 – 1.16.5, 1.13.2 | 8 |
+| `…+mc1.8.9.jar` … `…+mc1.12.2.jar` | 1.8.9 – 1.12.2 | 8 |
+| `…+mc1.7.10.jar` | 1.7.10 | 8 |
 
 The Java column lists the version those Forge releases run on: Java 17 for 1.17–1.20.4, Java 21 for
 1.20.5/1.20.6/1.21.x, Java 25 for 26.x, and Java 8 for 1.13–1.16 and 1.8–1.12. OptiForge cannot change the JVM
@@ -268,17 +269,17 @@ Forge。
 OptiFine 官方已标为兼容 Forge 的构建同样可以通过 OptiForge 运行，已验证的例子：1.16.5 `HD_U_G8`、
 1.17.1 `HD_U_H1`、1.19.3 `HD_U_I2_pre4`、1.21.8 `HD_U_J6_pre13`。
 
-### 产物
+### 下载
 
-四份产物，各自对应一代 Forge 的模组加载机制，不能互换。
+每个文件命名格式为 `OptiForge-Reforged-<版本>+mc<Minecraft 版本>.jar`，取 `+mc...` 与你 Minecraft 版本一致
+的那份即可。底层是四份产物（各自对应一代 Forge 的模组加载机制，不能互换），同一区间内的逐版本文件内容相同。
 
-| Minecraft | 文件 | Java |
+| 文件名模式 | Minecraft | Java |
 |---|---|---|
-| 1.17 – 1.20.1、1.20.6、1.21.x、26.1.2、26.2 | `OptiForge-1.0.1.jar` | 17 / 21 / 25 |
-| 1.14.4、1.15.2、1.16.5 | `OptiForge-1.0.1-oldml.jar` | 8 |
-| 1.13.2 | `OptiForge-1.0.1-oldml.jar` | 8 |
-| 1.8.9 – 1.12.2 | `OptiForge-1.0.1-legacy.jar` | 8 |
-| 1.7.10 | `OptiForge-1.0.1-legacy17.jar` | 8 |
+| `…+mc1.17.1.jar` … `…+mc26.2.jar` | 1.17 – 1.20.1、1.20.6、1.21.x、26.1.2、26.2 | 17 / 21 / 25 |
+| `…+mc1.14.4.jar`、`…+mc1.15.2.jar`、`…+mc1.16.5.jar`、`…+mc1.13.2.jar` | 1.14.4 – 1.16.5、1.13.2 | 8 |
+| `…+mc1.8.9.jar` … `…+mc1.12.2.jar` | 1.8.9 – 1.12.2 | 8 |
+| `…+mc1.7.10.jar` | 1.7.10 | 8 |
 
 Java 列是这些 Forge 版本自身的运行要求：1.17–1.20.4 用 17，1.20.5/1.20.6/1.21.x 用 21，26.x 用 25，
 1.13–1.16 与 1.8–1.12 用 8。OptiForge 无法改变游戏使用的 JVM，只会在 jar 或 Java 版本与所启动的版本线不匹配时

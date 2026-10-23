@@ -48,28 +48,37 @@ CurseForge 上已有同类做法（OptiFabric、Connector 等"需要用户自备
 
 ---
 
-## 2. 上传文件（每个上传 = 一个 File，版本范围各不相同）
+## 2. 上传文件（命名参照 OptiFabric Reforged）
 
-CurseForge 的"文件"是**一份 jar + 该 jar 支持的游戏版本集合**，所以四份产物要分成四个（或三个）文件上传。
-建议先只传三个稳定线，`-legacy17`（1.7.10）等真机验证通过后再补。
+命名规则：`OptiForge-Reforged-<版本>+mc<Minecraft 版本>.jar`，**每个 Minecraft 版本一个文件**。
+生成方式：
 
-| # | 上传的 jar | 显示名（Display name） | 文件类型 | 勾选的游戏版本 |
-|---|---|---|---|---|
-| 1 | `OptiForge-1.0.1.jar` | `OptiForge 1.0.1 — Forge 1.17–26.2` | Release | 1.17、1.17.1、1.18、1.18.1、1.18.2、1.19、1.19.1、1.19.2、1.19.3、1.19.4、1.20.1、1.20.6、1.21、1.21.1、1.21.6、1.21.7、1.21.8、1.21.9、1.21.10、1.21.11、26.1.2、26.2 |
-| 2 | `OptiForge-1.0.1-oldml.jar` | `OptiForge 1.0.1 — Forge 1.14.4–1.16.5 (Java 8)` | Release | 1.14.4、1.15.2、1.16.5 |
-| 3 | `OptiForge-1.0.1-oldml.jar` | `OptiForge 1.0.1 — Forge 1.13.2 (experimental)` | Beta | 1.13.2 |
-| 4 | `OptiForge-1.0.1-legacy.jar` | `OptiForge 1.0.1 — Forge 1.8.9–1.12.2 (Java 8)` | Release | 1.8.9、1.9.4、1.10.2、1.11.2、1.12.2 |
-| 5 | `OptiForge-1.0.1-legacy17.jar` | `OptiForge 1.0.1 — Forge 1.7.10 (alpha)` | Alpha | 1.7.10 |
+```powershell
+pwsh -File tools\make-curseforge-dist.ps1 -Version 1.0.1
+```
+
+产物在 `dist/cf/`：
+
+- `OptiForge-Reforged-1.0.1+mc<版本>.jar` — 共 **31 个**（Release 28 / Beta 2 / Alpha 1）
+- `upload-list.md` — 逐行列出：文件名、Release 类型、MC 版本、Forge 版本、OptiFine 示例构建、Java、changelog
+- `upload-manifest.csv` — 同样的表 + 每个文件的 SHA-256（传完可核对）
+
+上传时**每个文件单独创建一个 CurseForge File**，只勾该文件对应的那一个 Minecraft 版本：
+
+| 分组 | 文件 | 类型 |
+|---|---|---|
+| 主产物线 | `…+mc1.17.1.jar` … `…+mc26.2.jar`（21 个） | Release |
+| 旧 ModLauncher | `…+mc1.14.4.jar`、`…+mc1.15.2.jar` | Release |
+| 旧 ModLauncher（实验性） | `…+mc1.16.5.jar`、`…+mc1.13.2.jar` | **Beta** |
+| launchwrapper | `…+mc1.8.9.jar` … `…+mc1.12.2.jar`（5 个） | Release |
+| 1.7.10 | `…+mc1.7.10.jar` | **Alpha** |
 
 注意：
 
-- 同一份 jar 可以上传多次（#2 与 #3），只要显示名/文件类型不同即可——这样 1.13.2 会明确标成实验性。
-- **只勾选已实测进世界的版本**（上表就是），没验证的版本不要勾，避免差评。
-- 每个文件的 Changelog 用 `dist/changelog-*.md` 里对应的内容粘贴。
-- 依赖关系：不需要填依赖（不依赖别的 CurseForge 项目）；OptiFine 不是 CurseForge 依赖项。
-
----
-
+- 同一份构建产物在一个区间内是共享的，逐版本文件内容相同（用硬链接生成的，不占额外空间）。
+- 显示名（Display name）建议与文件名一致，例如 `OptiForge Reforged 1.0.1 for 1.16.5`。
+- 每个文件的 Changelog 用 `dist/cf/../changelog-*.md` 里对应那份（见 upload-list 的最后一列）。
+- 只上传 `upload-list.md` 里列出的版本，未验证过的不要建文件。
 ## 3. 项目描述（直接粘贴）
 
 > 描述文件三份：`curseforge-description.md` 是**中英合一的母本**（改内容改这一份），
