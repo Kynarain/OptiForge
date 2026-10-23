@@ -61,6 +61,7 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
         if (prepared == null) return input;
         ClassNode node = new ClassNode();
         new ClassReader(prepared).accept(node, 0);
+        debugServed(className, prepared, node);
         reportAdditions(input, node, className);
         mergeInPlaceAdditions(input, node);
         applied++;
@@ -389,6 +390,37 @@ public final class OptifineClassTransformer implements ITransformer<ClassNode> {
 
     public int appliedCount() {
         return applied;
+    }
+
+    /**
+     * {@code -Doptiforge.debugClass=<binary name>} prints what we actually serve for one class: its size plus
+     * every field each constructor writes. Measured use: the 1.16.5 crash
+     * {@code ClientWorld.getPartEntities -> field_217429_b is null} has to be told apart from "our bytes are
+     * fine and something else constructs the object" before changing the merge.
+     */
+    private static void debugServed(String className, byte[] prepared, ClassNode node) {
+        String wanted = System.getProperty("optiforge.debugClass", "");
+        if (wanted.isEmpty() || !wanted.equals(className)) return;
+        StringBuilder debug = new StringBuilder("[OptiForge] debug ").append(className)
+                .append(" prepared=").append(prepared.length).append("B fields=");
+        for (org.objectweb.asm.tree.FieldNode field : node.fields) {
+            debug.append(field.name).append(':').append(field.desc).append(' ');
+        }
+        debug.append("| ctors=");
+        for (org.objectweb.asm.tree.MethodNode method : node.methods) {
+            if (!method.name.equals("<init>")) continue;
+            debug.append(method.desc).append(" writes[");
+            for (org.objectweb.asm.tree.AbstractInsnNode instruction = method.instructions.getFirst();
+                    instruction != null; instruction = instruction.getNext()) {
+                if (!(instruction instanceof org.objectweb.asm.tree.FieldInsnNode)) continue;
+                org.objectweb.asm.tree.FieldInsnNode write = (org.objectweb.asm.tree.FieldInsnNode) instruction;
+                if (write.getOpcode() == org.objectweb.asm.Opcodes.PUTFIELD) {
+                    debug.append(write.name).append(' ');
+                }
+            }
+            debug.append("] ");
+        }
+        System.out.println(debug);
     }
 
     public Map<String, byte[]> prepared() {

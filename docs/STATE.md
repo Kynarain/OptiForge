@@ -1441,3 +1441,26 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
   "OptiFine 补丁类覆盖了 Forge binpatch 过的类，成员级合并够不着方法体"这一个根因，1.1.0 做方法体级合并。
 - 仅离线验证：1.7.10（真机死 Forge 1.7.10 自身的 launchwrapper CME）。
 - 不支持：OptiFine 1.17.1 G9（映射世代）、1.20.2（OptiFine 与 Forge 50 的 `ForgeGui` 冲突）。
+
+### 1.1.0 进行中：1.16.5 / 1.13.2 进世界崩溃的定位
+
+已做的验证（本轮）：
+
+- 1.16.5 在 rig 里用 `--server 127.0.0.1` 复现过一次进世界崩溃
+  （`NPE at ClientWorld.getPartEntities`，2026-10-23 21:53），之后几次同参数却不再自动连接，
+  说明 1.16.5 的 `--server` 自动连接在本环境不稳定，不能作为可重复的回归环境。
+- 直接反汇编我们**实际发出**的 `ClientWorld`：构造器里确实有
+  `putfield field_217429_b`（字节码偏移 23），字段也声明为 `private final Int2ObjectMap`，
+  所以"我们发的字节少了初始化"这个假设被否定；`func_217416_b()` 就是
+  `return this.field_217429_b.values()`，运行时该字段为 null 说明**实例不是由这份构造器创建的**，
+  或存在第二个类定义路径，需要运行时证据。
+- 新增诊断开关 `-Doptiforge.debugClass=<二进制类名>`：被服务时打印该类的大小、字段列表、
+  以及每个构造器写入的字段名。已在两个测试 profile 的 `arguments.jvm` 里预置：
+  - `OptiForge-1.16.5` → `net.minecraft.client.world.ClientWorld`
+  - `OptiForge-1.13.2` → `net.minecraft.client.renderer.chunk.RenderChunkCache`
+
+下一步（需要一次真机进世界）：真机崩溃时 `logs/latest.log` 里会出现
+`[OptiForge] debug <class> prepared=...B fields=... | ctors=... writes[...]`，
+据此判断是"我们发的字节有问题"还是"存在另一条构造路径"，再决定是补方法体级合并还是修构造。
+
+方法体级合并（1.1.0 的正式目标）暂未动手：在拿到这条运行时证据前改合并逻辑，属于盲改。
