@@ -1,53 +1,84 @@
 # OptiForge — 中文对照（自行阅读用，不要贴到 CurseForge）
 
-> 让 OptiFine 跑在 Forge 上：OptiForge 用 **你自己那份 OptiFine jar** 走 OptiFine 自带的 patcher，把补丁后的
-> 类和一个小的资源 mod 交给游戏，从而让 OptiFine 和 Forge 模组共存，覆盖 **Minecraft 1.7.10 到 26.2**。
-> 不含 OptiFine，请自行从 optifine.net 下载。
+> OptiFine 的下载页上，越来越多构建被标成 **"Forge: N/A"**——官方完全不支持 Forge，主要是 1.21.x 的各个
+> preview 和 26.x 的构建。OptiForge 让这些构建能在 Forge 上跑：启动时用 OptiFine 自己的 patcher 处理
+> **你自己那份 OptiFine jar**，从而让 OptiFine 与 Forge 模组共存，覆盖 **Minecraft 1.7.10 到 26.2**。
 
 **一句话版：**
 
-> 让 OptiFine 跑在 Forge 上，覆盖 1.7.10 到 26.2，需自备 OptiFine jar。
+> 让那些官方标注"不支持 Forge"的 OptiFine 构建跑在 Forge 上，覆盖 1.7.10 到 26.2。
 
-### OptiForge —— 让 OptiFine 在 Forge 上跑起来(1.7.10 – 26.2)
+### OptiForge —— 官方不支持 Forge 的 OptiFine 构建，现在能在 Forge 上跑
 
-把 **OptiFine** 装到 **Forge** 上的加载器。把对应你的游戏版本的 OptiForge jar 放进 `mods/`，
-把你自己的 **OptiFine jar** 放进 `optiforge/`，启动游戏即可。
+OptiFine 下载页有一列"Forge"，越来越多的构建在那列写的是 **"Forge N/A"**（官方不兼容 Forge）。
+这些构建根本没有 Forge 支持：没有给 Forge 用的补丁入口，也没有安装路径，普通方式装上去也跑不起来。
+在最新的版本线上这已经是常态——1.21.x 的各个 preview、26.x 的各个构建目前全是 N/A，Forge 用户在这些版本上
+根本用不了 OptiFine。
+
+**OptiForge 就是补上这一块。** 把对应版本的 OptiForge jar 放进 `mods/`，把**你自己那份 OptiFine jar**
+放进 `optiforge/`，启动游戏：OptiFine 自带的 patcher 会在启动时被调用，结果以游戏类 + 一个小资源 mod 的
+形式交给 Forge。
 
 > ⚠️ **本项目不含、也不二次分发 OptiFine。** 请到官网 <https://optifine.net/downloads> 下载对应你
 > Minecraft 版本的构建，原样放进去即可（**不需要**运行 OptiFine 的安装器）。产物里 `net/optifine/**`
 > 与 OptiFine 资源都是 0 条目。
 
-### 支持的版本
+### "Forge: N/A" 到底意味着什么
+
+- 构建是针对**某一个具体原版 Minecraft 构建**编译的，只带原版 jar 的补丁；没有 Forge 侧入口，
+  Forge 根本不知道该怎么加载它。
+- 官方支持 Forge 的 OptiFine 是"装进游戏"的方式工作的；N/A 构建连这套都没有，把它的安装器跑在 Forge
+  上也装不出能用的游戏。
+- Forge 还会拒绝把 `mods/` 里的 OptiFine jar 当普通模组：它声明了 ModLauncher 变换服务，Forge 会把它
+  当成"服务"并从模组发现里排除——结果就是两边同时改同一批类。
+
+OptiForge 接手的正是这块缺失：它把 OptiFine 自己的 xdelta 负载用 OptiFine 自己的 patcher 在安装器之外
+跑一遍，再把补丁后的类交给 Forge。
+
+### 已通过 OptiForge 验证的 Forge-N/A 构建
+
+下表每一行都用 Forge 启动并进入了世界（单人世界或 Forge 专用服务器），无崩溃报告；日志里有 OptiFine 自己的
+版本横幅和成百上千条 `[OptiFine]`。
+
+| Minecraft | OptiFine 构建（官方状态） | Forge | 通过 OptiForge 的结果 |
+|---|---|---|---|
+| 1.21 | `preview_OptiFine_1.21_HD_U_J1_pre9.jar`（N/A） | 51.0.33 | 进世界，OptiFine 正常 |
+| 1.21.1 | `preview_OptiFine_1.21.1_HD_U_J1_pre9.jar`（N/A） | 52.1.20 | 进世界，OptiFine 正常 |
+| 1.21.6 | `preview_OptiFine_1.21.6_HD_U_J6_pre3.jar`（N/A） | 56.0.9 | 进世界，OptiFine 正常 |
+| 1.21.7 | `preview_OptiFine_1.21.7_HD_U_J6_pre7.jar`（N/A） | 57.0.3 | 能启动能玩；该构建自身会跳过光影包 |
+| 1.21.9 | `preview_OptiFine_1.21.9_HD_U_J7_pre2.jar`（N/A） | 59.0.5 | 进世界，OptiFine 正常 |
+| 26.1.2 | `preview_OptiFine_26.1.2_HD_U_K1_pre2.jar`（N/A） | 64.1.5 | 进世界（Java 25） |
+| 26.2 | `preview_OptiFine_26.2_HD_U_K2_pre4.jar`（N/A） | 65.1.5 | 进世界（Java 25） |
+| 1.13.2 | `OptiFine_1.13.2_HD_U_G5.jar`（N/A） | 25.0.219 | **实验性**：能启动，进世界可能崩（见已知问题） |
+| 1.17.1 | `OptiFine_1.17.1_HD_U_G9.jar`（N/A） | 37.0.103 | **不可用**：负载用的是发布前的编号；请用 `HD_U_H1` |
+
+### 官方本来就兼容 Forge 的构建也能用
+
+OptiForge 不只处理 N/A 构建——OptiFine 官方标为"兼容 Forge"的构建同样能通过它运行，用的是同一套四份产物。
+已端到端验证的例子：1.16.5 `HD_U_G8`、1.17.1 `HD_U_H1`、1.19.3 `HD_U_I2_pre4`、1.21.8 `HD_U_J6_pre13`。
+
+### 支持的产物
 
 四份产物，按版本世代区分，**不可互换**——每个世代加载模组的机制不同，请选与你 Minecraft 版本对应的那份。
 
-| Minecraft | OptiForge 文件 | OptiFine 构建示例 | Java |
-|---|---|---|---|
-| **1.17 – 1.20.1、1.20.6、1.21.x、26.1.2、26.2** | `OptiForge-1.0.1.jar` | 对应版本任意构建 | 17 / 21 / 25 |
-| **1.14.4、1.15.2、1.16.5** | `OptiForge-1.0.1-oldml.jar` | `HD_U_G5` / `G6` / `G8` | **8** |
-| **1.13.2**（实验性） | `OptiForge-1.0.1-oldml.jar` | `1.13.2 HD_U_G5` | **8** |
-| **1.8.9 – 1.12.2** | `OptiForge-1.0.1-legacy.jar` | `M5` / `I5` / `I5` / `G5` / `G5` | **8** |
-| **1.7.10**（alpha） | `OptiForge-1.0.1-legacy17.jar` | `1.7.10 HD_U_E7` | **8** |
+| Minecraft | OptiForge 文件 | Java |
+|---|---|---|
+| **1.17 – 1.20.1、1.20.6、1.21.x、26.1.2、26.2** | `OptiForge-1.0.1.jar` | 17 / 21 / 25 |
+| **1.14.4、1.15.2、1.16.5** | `OptiForge-1.0.1-oldml.jar` | **8** |
+| **1.13.2** | `OptiForge-1.0.1-oldml.jar` | **8** |
+| **1.8.9 – 1.12.2** | `OptiForge-1.0.1-legacy.jar` | **8** |
+| **1.7.10** | `OptiForge-1.0.1-legacy17.jar` | **8** |
 
 Java 那一列是 **Forge 自己的要求**：1.13–1.16 与 1.8–1.12 的 Forge 不支持更新的 JVM。1.17–1.20.4 用 17，
 1.20.5/1.20.6/1.21.x 用 21，26.x 用 25。
-
-### 为什么需要它
-
-Forge 不把 OptiFine 当普通模组：`mods/` 里任何声明了 ModLauncher 变换服务的 jar 都会被当成"服务"并从模组
-发现里排除——而 OptiFine 本身就是这么打补丁的。所以直接把 OptiFine 放进 `mods/` 要么没效果，要么变成两边
-同时改同一批类。
-
-另一半问题是：OptiFine 的每个构建只针对**某一个具体 Minecraft 构建**打补丁，而 Forge 也在改同一批类
-（binpatch、访问放宽、自己的变换服务）。两边冲突起来很难查：访问权限丢失、方法体被搬走、构造器初始化
-被替换等等。
 
 ### 它做了什么
 
 启动时 OptiForge 会：
 
 1. 在 `<游戏目录>/optiforge/` 找 OptiFine jar（**不是** `mods/`）；
-2. 用 **OptiFine 自带的 patcher 与它自己的 xdelta 负载**，对本版本**原版**客户端 jar 打补丁；
+2. 用 **OptiFine 自带的 patcher 与它自己的 xdelta 负载**，对本版本**原版**客户端 jar 打补丁——
+   就是安装器会做的那一步，但不需要该构建具备 Forge 支持；
 3. 仅当运行时命名空间确实不同时重映射（1.17+ 的官方名），并对 1.13.2 那种扁平混淆负载用专门的桥接；
 4. 只重放**本版本线**的 access transformer；
 5. 在 OptiFine 补丁与 Forge 改写相撞处做少量兼容修复；
@@ -58,9 +89,10 @@ Forge 不把 OptiFine 当普通模组：`mods/` 里任何声明了 ModLauncher �
 ### 安装
 
 1. 按正常方式装好对应版本的 **Forge**。
-2. 到 <https://optifine.net/downloads> 下载**同一 Minecraft 版本**的 **OptiFine**。
+2. 到 <https://optifine.net/downloads> 下载**同一 Minecraft 版本**的 **OptiFine**（N/A 构建就选该版本最新的
+   preview）。
 3. 在游戏目录里建一个名为 `optiforge` 的文件夹（`.minecraft/optiforge/`）。
-4. 把 OptiFine jar 原样放进去（例如 `.minecraft/optiforge/OptiFine_1.16.5_HD_U_G8.jar`）。
+4. 把 OptiFine jar 原样放进去（例如 `.minecraft/optiforge/preview_OptiFine_26.2_HD_U_K2_pre4.jar`）。
 5. 把对应版本的 **OptiForge** jar 放进 `.minecraft/mods/`。
 6. 启动游戏。
 
@@ -96,9 +128,8 @@ Forge 不把 OptiFine 当普通模组：`mods/` 里任何声明了 ModLauncher �
 - **1.16.5 与 1.13.2 是实验性的。** 能启动、OptiFine 正常工作，但进世界可能崩在 OptiFine 补丁类里
   （1.16.5 是 `ClientWorld.getPartEntities`，1.13.2 是 `RenderChunkCache`）。原因：OptiFine 的负载替换了
   Forge 已经 binpatch 过的类，而 Forge 写在这些类**方法体内部**的改动尚未完全合并。计划在 1.1.0 修。
-  想试 1.16.5 请下载 Beta 区那份文件。
-- **OptiFine `1.17.1 HD_U_G9`**（官网标 N/A）不可用：它引用发布前的 MCP 编号且没有公开映射。
-  1.17.1 请用 `HD_U_H1`。
+- **OptiFine `1.17.1 HD_U_G9`** 是唯一救不回来的 N/A 构建：它引用发布前的 MCP 编号且没有公开映射。
+  1.17.1 请用 `HD_U_H1`（官方标为兼容）。
 - **1.20.2**：OptiFine 自身与 Forge 50 冲突（`IllegalAccessError ForgeGui.f_291320_`），与 OptiForge 无关。
 - **1.7.10**：产物离线验证全绿（负载 md5、类布局），但作者测试环境里 Forge 1.7.10 自身的 launchwrapper
   阶段会抛 `ConcurrentModificationException`，真机尚未确认，请按 alpha 对待。

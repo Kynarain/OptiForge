@@ -23,12 +23,12 @@ CurseForge 上已有同类做法（OptiFabric、Connector 等"需要用户自备
 ## 1. 创建项目（网页操作，约 5 分钟）
 
 1. 打开 <https://www.curseforge.com/minecraft/mc-mods> → `Add a Project`（或 <https://authors.curseforge.com/>）。
-2. 项目类型选 **Mods → Minecraft**。
+2. 项目类型选 **Mods → Minecraft**。定位一句话：**让官方标注 "Forge: N/A" 的 OptiFine 构建能在 Forge 上跑**。
 3. 名称：`OptiForge`；slug（URL）：`optiforge`（若被占用可 `optiforge-loader`）。
 4. 摘要（Summary，≤ 240 字符，英文）：
 
-   > Load OptiFine on Forge. Runs your own OptiFine jar through its own patcher and delivers the patched
-   > classes plus a resource mod, from Minecraft 1.7.10 to 26.x. Does not include OptiFine.
+   > Run the OptiFine builds that OptiFine marks "Forge: N/A" on Forge — OptiForge applies OptiFine's own
+   > patcher to your own OptiFine jar, from Minecraft 1.7.10 to 26.2. OptiFine is not included.
 
 5. 分类：`API and Library` / `Utility`（次选 `Performance`、`Optimization`）。游戏版本与 Mod Loader：
    **Forge**。

@@ -23,15 +23,12 @@ body = []
 for line in lines[en_start + 1:zh_start]:
     if line.strip() == "---":
         continue
-    if line.startswith("### OptiForge —"):
+    if line.startswith("### OptiForge —") or line.startswith("### OptiForge ——"):
         continue
     body.append(line)
 
 header = [
-    "# OptiForge — OptiFine on Forge (1.7.10 – 26.2)",
-    "",
-    "Run **OptiFine** on **Forge**: put the OptiForge jar for your game version into `mods/`, put **your own",
-    "OptiFine jar** into `optiforge/`, and start the game. OptiFine itself is not included.",
+    "# OptiForge — OptiFine builds that do not support Forge, now on Forge (1.7.10 – 26.2)",
     "",
 ]
 

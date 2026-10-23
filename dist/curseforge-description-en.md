@@ -1,43 +1,70 @@
-# OptiForge — OptiFine on Forge (1.7.10 – 26.2)
+# OptiForge — OptiFine builds that do not support Forge, now on Forge (1.7.10 – 26.2)
 
-Run **OptiFine** on **Forge**: put the OptiForge jar for your game version into `mods/`, put **your own
-OptiFine jar** into `optiforge/`, and start the game. OptiFine itself is not included.
+OptiFine's download page has a "Forge" column, and for a growing number of builds it says **"Forge N/A"**.
+Those builds ship no Forge support at all: no Forge-aware patch payload, no installer path, nothing to load
+them with. On the newest lines this is the *normal* case — every 1.21.x preview and every 26.x build has been
+marked N/A so far, so a Forge user could not use OptiFine on those versions at all.
 
-A loader that brings **OptiFine** to **Forge**. Put the OptiForge jar for your game version into `mods/`, put
-**your own OptiFine jar** into `optiforge/`, and start the game.
+**OptiForge makes those builds work on Forge.** Put the OptiForge jar for your game version into `mods/`, put
+**your own OptiFine jar** into `optiforge/`, and start the game: OptiFine's own patcher is applied at startup,
+and the result is delivered to Forge as game classes plus a small resource mod.
 
 > ⚠️ **OptiFine is not bundled or redistributed.** Download the build for your Minecraft version from the
 > official site (<https://optifine.net/downloads>) and drop the jar in as-is — you do **not** need to run
 > OptiFine's installer. OptiForge never ships OptiFine code; the artifacts contain zero `net/optifine/**`
 > entries and zero OptiFine assets.
 
-### Supported versions
+### What "Forge: N/A" actually means
+
+- The build is compiled against one particular vanilla Minecraft build and only ships patches for the vanilla
+  jar. There is no Forge-side entry point, so Forge never learns how to load it.
+- OptiFine for Forge normally works by being installed *into* the game; on an N/A build even that is missing,
+  and running its installer on a Forge setup does not produce a working game.
+- Forge itself refuses to treat an OptiFine jar in `mods/` as a mod: the jar declares a ModLauncher
+  transformation service, so Forge picks it up as a service and excludes it from mod discovery — leaving two
+  sides patching the same classes.
+
+OptiForge takes over exactly that missing piece: it runs OptiFine's own xdelta payload with OptiFine's own
+patcher, outside its installer, and hands the patched classes to Forge.
+
+### Forge-N/A builds verified through OptiForge
+
+Each row was started with Forge and brought into a world (singleplayer or a Forge dedicated server) with no
+crash reports; the log shows OptiFine's own version banner and hundreds of `[OptiFine]` lines.
+
+| Minecraft | OptiFine build (official status) | Forge | Result through OptiForge |
+|---|---|---|---|
+| 1.21 | `preview_OptiFine_1.21_HD_U_J1_pre9.jar` (Forge N/A) | 51.0.33 | world loads, OptiFine active |
+| 1.21.1 | `preview_OptiFine_1.21.1_HD_U_J1_pre9.jar` (Forge N/A) | 52.1.20 | world loads, OptiFine active |
+| 1.21.6 | `preview_OptiFine_1.21.6_HD_U_J6_pre3.jar` (Forge N/A) | 56.0.9 | world loads, OptiFine active |
+| 1.21.7 | `preview_OptiFine_1.21.7_HD_U_J6_pre7.jar` (Forge N/A) | 57.0.3 | starts and works; shader packs are skipped by OptiFine itself on this build |
+| 1.21.9 | `preview_OptiFine_1.21.9_HD_U_J7_pre2.jar` (Forge N/A) | 59.0.5 | world loads, OptiFine active |
+| 26.1.2 | `preview_OptiFine_26.1.2_HD_U_K1_pre2.jar` (Forge N/A) | 64.1.5 | world loads (Java 25) |
+| 26.2 | `preview_OptiFine_26.2_HD_U_K2_pre4.jar` (Forge N/A) | 65.1.5 | world loads (Java 25) |
+| 1.13.2 | `OptiFine_1.13.2_HD_U_G5.jar` (Forge N/A) | 25.0.219 | **experimental**: starts, but entering a world can crash (see Known issues) |
+| 1.17.1 | `OptiFine_1.17.1_HD_U_G9.jar` (Forge N/A) | 37.0.103 | **does not work**: payload uses pre-release ids; use `HD_U_H1` |
+
+### Official Forge-compatible builds also work
+
+OptiForge is not limited to N/A builds — the builds that OptiFine already marks as Forge-compatible run through
+it as well, on the same four artifacts. For example, verified end-to-end: 1.16.5 `HD_U_G8`,
+1.17.1 `HD_U_H1`, 1.19.3 `HD_U_I2_pre4`, 1.21.8 `HD_U_J6_pre13`.
+
+### Supported artifacts
 
 Four artifacts, one per era. They are **not interchangeable**: each era loads mods through a different
 mechanism, so pick the jar that matches your Minecraft version.
 
-| Minecraft | OptiForge file | Example OptiFine build | Java |
-|---|---|---|---|
-| **1.17 – 1.20.1, 1.20.6, 1.21.x, 26.1.2, 26.2** | `OptiForge-1.0.1.jar` | matching build, any | 17 / 21 / 25 |
-| **1.14.4, 1.15.2, 1.16.5** | `OptiForge-1.0.1-oldml.jar` | `HD_U_G5` / `HD_U_G6` / `HD_U_G8` | **8** |
-| **1.13.2** (experimental) | `OptiForge-1.0.1-oldml.jar` | `1.13.2 HD_U_G5` | **8** |
-| **1.8.9 – 1.12.2** | `OptiForge-1.0.1-legacy.jar` | `HD_U_M5` / `I5` / `I5` / `G5` / `G5` | **8** |
-| **1.7.10** (alpha) | `OptiForge-1.0.1-legacy17.jar` | `1.7.10 HD_U_E7` | **8** |
+| Minecraft | OptiForge file | Java |
+|---|---|---|
+| **1.17 – 1.20.1, 1.20.6, 1.21.x, 26.1.2, 26.2** | `OptiForge-1.0.1.jar` | 17 / 21 / 25 |
+| **1.14.4, 1.15.2, 1.16.5** | `OptiForge-1.0.1-oldml.jar` | **8** |
+| **1.13.2** | `OptiForge-1.0.1-oldml.jar` | **8** |
+| **1.8.9 – 1.12.2** | `OptiForge-1.0.1-legacy.jar` | **8** |
+| **1.7.10** | `OptiForge-1.0.1-legacy17.jar` | **8** |
 
 The Java column is Forge's own requirement, not a preference: Forge 1.13–1.16 and 1.8–1.12 do not run on newer
 JVMs. On 1.17–1.20.4 use Java 17, on 1.20.5/1.20.6/1.21.x Java 21, and on 26.x Java 25.
-
-### Why it is needed
-
-Forge does not treat OptiFine as a mod. Any jar in `mods/` that declares a ModLauncher transformation service
-is picked up as a **service** and excluded from mod discovery — and OptiFine genuinely is one, because that is
-how it patches the game. Dropping the OptiFine jar into `mods/` therefore either does nothing useful or ends in
-two sides patching the same classes.
-
-The second half of the problem is that OptiFine's payload is built against **one specific Minecraft build per
-release**, while Forge also rewrites those same classes (binpatches, access wideners, its own transformation
-services). The two disagree in ways that are hard to diagnose: missing access, methods whose bodies moved,
-constructors whose initialisation was replaced, and so on.
 
 ### What it does
 
@@ -45,7 +72,7 @@ At startup OptiForge:
 
 1. finds the OptiFine jar in `<game directory>/optiforge/` (never in `mods/`);
 2. applies **OptiFine's own xdelta payload** with OptiFine's own patcher to the **vanilla** client jar for your
-   version;
+   version — the same payload the installer would apply, but without needing an N/A build's Forge support;
 3. remaps only when the runtime really uses a different namespace (1.17+ with official names), with a dedicated
    obfuscation bridge for the old 1.13.2-style flat payload;
 4. replays **only the running version line's** access transformers onto the patched classes;
@@ -57,10 +84,11 @@ At startup OptiForge:
 ### Installation
 
 1. Install **Forge** for your Minecraft version, as usual.
-2. Download **OptiFine** for the *same* Minecraft version from <https://optifine.net/downloads>.
+2. Download **OptiFine** for the *same* Minecraft version from <https://optifine.net/downloads> — for N/A
+   builds, pick the newest preview for that version.
 3. Create a folder named `optiforge` inside your game directory (`.minecraft/optiforge/`).
 4. Put the OptiFine jar there, keeping its original file name
-   (e.g. `.minecraft/optiforge/OptiFine_1.16.5_HD_U_G8.jar`).
+   (e.g. `.minecraft/optiforge/preview_OptiFine_26.2_HD_U_K2_pre4.jar`).
 5. Put the matching **OptiForge** jar into `.minecraft/mods/`.
 6. Start the game.
 
@@ -99,10 +127,9 @@ programs in the log:
 - **1.16.5 and 1.13.2 are experimental.** The game starts and OptiFine works, but entering a world can crash
   inside OptiFine's patched classes — `ClientWorld.getPartEntities` on 1.16.5, `RenderChunkCache` on 1.13.2.
   Cause: OptiFine's payload replaces classes Forge has already binpatch-ed, and Forge's code changes *inside*
-  those classes are not fully merged yet. Fix planned for 1.1.0. Download the 1.16.5 file from the "Beta"
-  section if you want to try it.
-- **OptiFine `1.17.1 HD_U_G9`** (marked N/A on optifine.net) does not work: its payload uses pre-release MCP
-  ids and no public mapping exists for them. Use `HD_U_H1` on 1.17.1.
+  those classes are not fully merged yet. Fix planned for 1.1.0.
+- **OptiFine `1.17.1 HD_U_G9`** is the one N/A build that does not work: its payload uses pre-release MCP ids
+  and no public mapping exists for them. Use `HD_U_H1` on 1.17.1 (also N/A-free: it is officially compatible).
 - **1.20.2**: OptiFine itself crashes against Forge 50 (`IllegalAccessError ForgeGui.f_291320_`), independent
   of OptiForge.
 - **1.7.10**: the artifact passes offline verification (payload md5, class layout) but Forge 1.7.10's own
