@@ -13,7 +13,7 @@
 
 > Loads OptiFine on Forge, including builds that OptiFine lists as "Forge N/A". At startup OptiForge applies
 > OptiFine's own patcher to a user-supplied OptiFine jar and hands the patched classes to Forge. OptiFine is
-> not included. Tested on 24 Minecraft versions from 1.7.10 to 26.2.
+> not included. Verified in-world on 28 Minecraft versions, 1.8.9 to 26.2; two more lines start but can crash in-world.
 
 **One-liner:**
 
@@ -23,11 +23,16 @@
 
 ## 二、详细描述(English)
 
-### OptiForge
+### OptiForge — the OptiFine builds that do not support Forge, now on Forge
 
-OptiForge loads OptiFine on Forge. It applies OptiFine's own patcher to **a user-supplied OptiFine jar** at
-startup and delivers the patched game classes plus a small resource mod to Forge. This works for OptiFine
-builds that OptiFine lists as Forge-compatible, and also for builds that OptiFine lists as **"Forge N/A"**.
+OptiFine's download page has a "Forge" column, and for a growing number of builds it says **"Forge N/A"** —
+no Forge support at all. Those builds ship no Forge-aware patch payload and no installer path, so a Forge user
+had no supported way to load them. On the newest lines this is already the normal case: every 1.21.x preview
+and every 26.x build in the snapshot this project tracks is marked N/A.
+
+**OptiForge makes those builds work on Forge.** It applies OptiFine's own patcher to **a user-supplied
+OptiFine jar** at startup and delivers the patched game classes plus a small resource mod to Forge; the builds
+OptiFine already lists as Forge-compatible run through it as well.
 
 **OptiFine is not included and is not redistributed.** The published jars contain no OptiFine code and no
 OptiFine assets; every user has to download OptiFine from <https://optifine.net/downloads> themselves.
@@ -198,8 +203,8 @@ Include:
 ## 三、简要描述(中文)
 
 > 在 Forge 上加载 OptiFine，包括 OptiFine 官方标注为 "Forge N/A" 的构建。启动时 OptiForge 用 OptiFine 自带的
-> patcher 处理用户自备的 OptiFine jar，并把补丁后的类交给 Forge。本项目不含 OptiFine。已在 1.7.10 到 26.2
-> 之间的 24 个 Minecraft 版本上实测。
+> patcher 处理用户自备的 OptiFine jar，并把补丁后的类交给 Forge。本项目不含 OptiFine。已在 1.8.9 到 26.2
+> 之间的 28 个 Minecraft 版本上实测进世界；另有 2 条线能启动、进世界会崩。
 
 **一句话版：**
 
@@ -209,11 +214,14 @@ Include:
 
 ## 四、详细描述(中文)
 
-### OptiForge
+### OptiForge —— 官方不支持 Forge 的 OptiFine 构建，现在能在 Forge 上跑
 
-OptiForge 在 Forge 上加载 OptiFine。启动时它用 OptiFine 自带的 patcher 处理**用户自备的 OptiFine jar**，
-把补丁后的游戏类与一个小资源 mod 交给 Forge。官方标为兼容 Forge 的构建可以用，官方标为 **"Forge N/A"**
-的构建也可以用。
+OptiFine 的下载页有一列"Forge"，越来越多的构建在那列写的是 **"Forge N/A"**（官方不兼容 Forge）。这些构建
+没有给 Forge 用的补丁入口，也没有安装路径，Forge 用户此前没有受支持的加载方式。在最新的版本线上这已经是
+常态：本项目跟踪的快照里，1.21.x 的各个 preview 与 26.x 的各个构建全部标为 N/A。
+
+**OptiForge 就是补上这一块。** 启动时它用 OptiFine 自带的 patcher 处理**用户自备的 OptiFine jar**，
+把补丁后的游戏类与一个小资源 mod 交给 Forge；官方本来就标为兼容 Forge 的构建同样可以通过它运行。
 
 **本项目不含、也不分发 OptiFine。** 发布的 jar 里没有任何 OptiFine 代码或资源；使用者需要自己到
 <https://optifine.net/downloads> 下载。

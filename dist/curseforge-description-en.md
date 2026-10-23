@@ -1,8 +1,13 @@
-# OptiForge
+# OptiForge — the OptiFine builds that do not support Forge, now on Forge (1.7.10 – 26.2)
 
-OptiForge loads OptiFine on Forge. It applies OptiFine's own patcher to **a user-supplied OptiFine jar** at
-startup and delivers the patched game classes plus a small resource mod to Forge. This works for OptiFine
-builds that OptiFine lists as Forge-compatible, and also for builds that OptiFine lists as **"Forge N/A"**.
+OptiFine's download page has a "Forge" column, and for a growing number of builds it says **"Forge N/A"** —
+no Forge support at all. Those builds ship no Forge-aware patch payload and no installer path, so a Forge user
+had no supported way to load them. On the newest lines this is already the normal case: every 1.21.x preview
+and every 26.x build in the snapshot this project tracks is marked N/A.
+
+**OptiForge makes those builds work on Forge.** It applies OptiFine's own patcher to **a user-supplied
+OptiFine jar** at startup and delivers the patched game classes plus a small resource mod to Forge; the builds
+OptiFine already lists as Forge-compatible run through it as well.
 
 **OptiFine is not included and is not redistributed.** The published jars contain no OptiFine code and no
 OptiFine assets; every user has to download OptiFine from <https://optifine.net/downloads> themselves.
