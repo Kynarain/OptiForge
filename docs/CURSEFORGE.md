@@ -54,7 +54,7 @@ CurseForge 上已有同类做法（OptiFabric、Connector 等"需要用户自备
 生成方式：
 
 ```powershell
-pwsh -File tools\make-cf-bundle.ps1 -Version 1.0.1
+pwsh -File tools\make-cf-bundle.ps1 -Version 1.0.2
 ```
 
 产物在 `dist/cf/`：
@@ -75,7 +75,7 @@ pwsh -File tools\make-cf-bundle.ps1 -Version 1.0.1
 
 注意：
 
-- 同一份构建产物在一个区间内是共享的，逐版本文件内容相同（用硬链接生成的，不占额外空间）。
+- 每个文件内嵌 `optiforge/target-mc.txt` 标记，**31 个文件的 SHA-256 各不相同**（不是同一份文件的副本）；启动时标记与运行版本不一致会打印警告。
 - 显示名（Display name）建议与文件名一致，例如 `OptiForge Reforged 1.0.1 for 1.16.5`。
 - 每个文件的 Changelog 用 `dist/cf/../changelog-*.md` 里对应那份（见 upload-list 的最后一列）。
 - 只上传 `upload-list.md` 里列出的版本，未验证过的不要建文件。

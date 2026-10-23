@@ -84,10 +84,23 @@ foreach ($line in $lines) {
     $source = $sources[$line.kind]
     $target = Join-Path $OutDirectory "$Project-$Version+mc$($line.mc).jar"
     if (Test-Path $target) { Remove-Item $target -Force }
+    Copy-Item $source $target -Force
+    # Each per-version file gets optiforge/target-mc.txt so the 31 files are genuinely distinct builds (not 31
+    # copies of 4 jars) and the loader can name the right download when the wrong file is installed.
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::Open($target, 'Update')
     try {
-        New-Item -ItemType HardLink -Path $target -Target $source -ErrorAction Stop | Out-Null
-    } catch {
-        Copy-Item $source $target -Force
+        $existing = $zip.Entries | Where-Object { $_.FullName -eq 'optiforge/target-mc.txt' }
+        if (-not $existing) {
+            $entry = $zip.CreateEntry('optiforge/target-mc.txt')
+            $stream = $entry.Open()
+            $text = "$($line.mc)`r`n$Project $Version built for Minecraft $($line.mc)`r`n"
+            $bytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($text)
+            $stream.Write($bytes, 0, $bytes.Length)
+            $stream.Dispose()
+        }
+    } finally {
+        $zip.Dispose()
     }
     $manifest.Add([pscustomobject]@{
         mc        = $line.mc

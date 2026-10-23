@@ -88,6 +88,17 @@ public final class JarGuide {
         String expectedJava = expectedJava(mcVersion);
         boolean odd = false;
         StringBuilder message = new StringBuilder();
+        // CurseForge files are built per Minecraft version, each carrying optiforge/target-mc.txt; a mismatch means
+        // the user downloaded the file for another version (+mc<x.y.z> in the file name names the intended one).
+        if (mcVersion != null && !mcVersion.isEmpty()) {
+            String marker = targetMarker();
+            if (!marker.isEmpty() && !marker.equals(mcVersion)) {
+                odd = true;
+                message.append("this file was built for Minecraft ").append(marker)
+                        .append(" but the game is ").append(mcVersion)
+                        .append("; download the file whose name ends with +mc").append(mcVersion).append(".jar");
+            }
+        }
         if (java != 0 && javaTarget == 17 && java < 17) {
             odd = true;
             message.append("this ") .append(artifact).append(" artifact is Java 17 bytecode but the runtime is Java ")
@@ -115,5 +126,42 @@ public final class JarGuide {
         System.out.println(line.trim());
         if (notes != null) notes.append(line);
         return true;
+    }
+
+    /**
+     * Reads {@code optiforge/target-mc.txt}, which the CurseForge bundle writes into every per-version file.
+     * Returns the first non-empty line (the Minecraft version the file was built for), or "" when the jar has no
+     * marker, so the plain build outputs and older releases stay silent.
+     */
+    private static String targetMarker() {
+        java.io.InputStream in = null;
+        try {
+            in = JarGuide.class.getResourceAsStream("/optiforge/target-mc.txt");
+            if (in == null) return "";
+            java.io.ByteArrayOutputStream buffer = new java.io.ByteArrayOutputStream();
+            byte[] chunk = new byte[256];
+            int read;
+            while ((read = in.read(chunk)) > 0) {
+                buffer.write(chunk, 0, read);
+            }
+            String[] lines = new String(buffer.toByteArray(), "UTF-8").split("\\R");
+            for (String line : lines) {
+                String trimmed = line.trim();
+                if (!trimmed.isEmpty()) {
+                    return trimmed.startsWith("mc=") ? trimmed.substring(3) : trimmed;
+                }
+            }
+            return "";
+        } catch (Throwable ignored) {
+            return "";
+        } finally {
+            if (in != null) {
+                try {
+                    in.close();
+                } catch (java.io.IOException ignored) {
+                    // nothing useful to do
+                }
+            }
+        }
     }
 }
