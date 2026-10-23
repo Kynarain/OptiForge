@@ -1477,3 +1477,12 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
 - 校验：四角 alpha=0（原来四角是 #ECECEC 不透明），洋红底合成后只有 OF 字形挡住背景。
 
 影响：jar 内 `optiforge_icon.png` 与 README 顶部图都变成透明底；1.17+ 产物的 `logoFile` 不变。
+
+### 1.0.1 附加：CurseForge 上架材料
+
+- 核对产物不含 OptiFine：四份 jar 里 `net/optifine/**` 与 `assets/**` 都是 0 条目，只带三份映射表
+  （Mojang 官方映射派生、Forge maven 的 mcp_config、1.17.1 纯数字编号对照）。
+- 新增 `dist/`：四份 jar、`icon-512.png`、`curseforge-description.md`（英/中要点齐备）、
+  四个 changelog（1.17-26 / 1.14-1.16 / 1.8-1.12 / 1.7.10）。
+- 新增 `docs/CURSEFORGE.md`：项目创建、每个文件勾选的游戏版本（只勾已实测进世界的）、
+  合规声明、上架后维护建议。

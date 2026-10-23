@@ -179,6 +179,14 @@ Forge 不把 OptiFine 当 mod：`mods/` 里任何声明了 `cpw.mods.modlauncher
 只依赖 ModLauncher API + ASM：一份 jar 同时给 1.20.x(Java 17) / 1.21.x(21) / 26.x(25) 用，不需要
 ForgeGradle，也不需要每条线一个工程。
 
+## 发布到 CurseForge
+
+上架材料都在 `dist/`：四份 jar、512 图标、项目描述（`curseforge-description.md`）、各文件的 changelog。
+完整操作步骤（项目设置、每个文件勾选哪些游戏版本、合规要点）见
+[docs/CURSEFORGE.md](docs/CURSEFORGE.md)。
+
+关键点：产物**不含 OptiFine**（`net/optifine/**` 0 条目），用户必须自行从 optifine.net 下载并放进
+`optiforge/`；四份产物按版本线分别上传，1.13.2 与 1.16.5 标 Beta、1.7.10 标 Alpha。
 ## 构建
 
 ```powershell
