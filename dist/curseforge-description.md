@@ -37,6 +37,11 @@ OptiFine already lists as Forge-compatible run through it as well.
 **OptiFine is not included and is not redistributed.** The published jars contain no OptiFine code and no
 OptiFine assets; every user has to download OptiFine from <https://optifine.net/downloads> themselves.
 
+**Relation to other projects.** This is an independent project. A different mod named "OptiForge" by
+ZekerZhayard exists (Forge 1.17.1, and it requires running OptiFine's installer); this project is not affiliated
+with it, shares no code with it, and does not need OptiFine's installer at all. The in-game mod name stays
+"OptiForge" (mod id `optiforge`).
+
 ### "Forge N/A" builds
 
 OptiFine's download page lists a Forge compatibility value per build. In the snapshot this project tracks
@@ -225,6 +230,10 @@ OptiFine 的下载页有一列"Forge"，越来越多的构建在那列写的是 
 
 **本项目不含、也不分发 OptiFine。** 发布的 jar 里没有任何 OptiFine 代码或资源；使用者需要自己到
 <https://optifine.net/downloads> 下载。
+
+**与其它项目的关系。** 本项目是独立项目。另有一个由 ZekerZhayard 发布的同名模组 "OptiForge"（面向 Forge
+1.17.1，且需要先运行 OptiFine 安装器）；本项目与它没有隶属关系、不共享代码，也完全不需要 OptiFine 安装器。
+游戏内的模组名仍为 "OptiForge"（mod id `optiforge`）。
 
 ### 关于 "Forge N/A" 构建
 

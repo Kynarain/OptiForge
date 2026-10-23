@@ -24,7 +24,17 @@ CurseForge 上已有同类做法（OptiFabric、Connector 等"需要用户自备
 
 1. 打开 <https://www.curseforge.com/minecraft/mc-mods> → `Add a Project`（或 <https://authors.curseforge.com/>）。
 2. 项目类型选 **Mods → Minecraft**。定位一句话：**在 Forge 上加载 OptiFine，包括官方标注 "Forge N/A" 的构建**；文案要求客观、可核查，不写宣传语。
-3. 名称：`OptiForge`；slug（URL）：`optiforge`（若被占用可 `optiforge-loader`）。
+3. 名称：**`OptiForge Reforged`**；slug（URL）：`optiforge-reforged`。
+
+   > ⚠️ 名称冲突（实测）：`OptiForge` / `optiforge` 已被另一位作者的项目占用
+   > （[curseforge.com/minecraft/mc-mods/optiforge](https://www.curseforge.com/minecraft/mc-mods/optiforge)，
+   > 作者 ZekerZhayard，[GitHub](https://github.com/ZekerZhayard/OptiForge)，面向 Forge 1.17.1、
+   > 需要先运行 OptiFine 安装器）。CurseForge 要求项目名唯一，所以必须换名。
+   >
+   > 备选名（按推荐顺序，逐个试）：`OptiForge Reforged` → `OptiForge Loader` → `ForgeOptiFine Loader`。
+   > 游戏内显示名与 modId 不变（`OptiForge` / `optiforge`），产物文件名也不变；描述里已加一段
+   > "Relation to other projects" 说明本项目与那个同名项目无关。
+
 4. 摘要（Summary，≤ 240 字符，英文）：
 
    > Loads OptiFine on Forge, including builds that OptiFine lists as "Forge N/A". Applies OptiFine's own

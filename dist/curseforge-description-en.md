@@ -1,4 +1,4 @@
-# OptiForge — the OptiFine builds that do not support Forge, now on Forge (1.7.10 – 26.2)
+# OptiForge Reforged — the OptiFine builds that do not support Forge, now on Forge (1.7.10 – 26.2)
 
 OptiFine's download page has a "Forge" column, and for a growing number of builds it says **"Forge N/A"** —
 no Forge support at all. Those builds ship no Forge-aware patch payload and no installer path, so a Forge user
@@ -11,6 +11,11 @@ OptiFine already lists as Forge-compatible run through it as well.
 
 **OptiFine is not included and is not redistributed.** The published jars contain no OptiFine code and no
 OptiFine assets; every user has to download OptiFine from <https://optifine.net/downloads> themselves.
+
+**Relation to other projects.** This is an independent project. A different mod named "OptiForge" by
+ZekerZhayard exists (Forge 1.17.1, and it requires running OptiFine's installer); this project is not affiliated
+with it, shares no code with it, and does not need OptiFine's installer at all. The in-game mod name stays
+"OptiForge" (mod id `optiforge`).
 
 ### "Forge N/A" builds
 

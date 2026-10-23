@@ -20,6 +20,10 @@ OptiFine 的下载页有一列"Forge"，越来越多的构建在那列写的是 
 **本项目不含、也不分发 OptiFine。** 发布的 jar 里没有任何 OptiFine 代码或资源；使用者需要自己到
 <https://optifine.net/downloads> 下载。
 
+**与其它项目的关系。** 本项目是独立项目。另有一个由 ZekerZhayard 发布的同名模组 "OptiForge"（面向 Forge
+1.17.1，且需要先运行 OptiFine 安装器）；本项目与它没有隶属关系、不共享代码，也完全不需要 OptiFine 安装器。
+游戏内的模组名仍为 "OptiForge"（mod id `optiforge`）。
+
 ### 关于 "Forge N/A" 构建
 
 OptiFine 下载页为每个构建标出一个 Forge 兼容值。本项目跟踪的快照

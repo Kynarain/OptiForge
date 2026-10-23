@@ -28,7 +28,7 @@ for line in lines[en_start + 1:zh_start]:
     body.append(line)
 
 header = [
-    "# OptiForge — the OptiFine builds that do not support Forge, now on Forge (1.7.10 – 26.2)",
+    "# OptiForge Reforged — the OptiFine builds that do not support Forge, now on Forge (1.7.10 – 26.2)",
     "",
 ]
 
