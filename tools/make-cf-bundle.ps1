@@ -14,6 +14,8 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$python = 'C:\Users\kynar\AppData\Local\Programs\DSH Desktop\resources\office-runtime\primary-runtime\dependencies\python\python.exe'
+if (-not (Test-Path $python)) { throw 'bundled python not found: ' + $python }
 $nl = [Environment]::NewLine
 
 $lines = @(
@@ -84,25 +86,10 @@ foreach ($line in $lines) {
     $source = $sources[$line.kind]
     $target = Join-Path $OutDirectory "$Project-$Version+mc$($line.mc).jar"
     if (Test-Path $target) { Remove-Item $target -Force }
-    Copy-Item $source $target -Force
-    # Each per-version file gets optiforge/target-mc.txt so the 31 files are genuinely distinct builds (not 31
-    # copies of 4 jars) and the loader can name the right download when the wrong file is installed.
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
-    $zip = [System.IO.Compression.ZipFile]::Open($target, 'Update')
-    try {
-        $existing = $zip.Entries | Where-Object { $_.FullName -eq 'optiforge/target-mc.txt' }
-        if (-not $existing) {
-            $entry = $zip.CreateEntry('optiforge/target-mc.txt')
-            $stream = $entry.Open()
-            $text = "$($line.mc)`r`n$Project $Version built for Minecraft $($line.mc)`r`n"
-            $bytes = (New-Object System.Text.UTF8Encoding($false)).GetBytes($text)
-            $stream.Write($bytes, 0, $bytes.Length)
-            $stream.Dispose()
-        }
-    } finally {
-        $zip.Dispose()
-    }
-    $manifest.Add([pscustomobject]@{
+    # The marker rewrite runs in Python: .NET's ZipArchive Update mode produced archives Java rejected with
+    # "ZipException: invalid entry size", so entry-by-entry rewriting is delegated to tools/inject-target-marker.py.
+    & $python 'tools\inject-target-marker.py' $source $target $line.mc $Project $Version
+    if ($LASTEXITCODE -ne 0) { throw "marker injection failed for $target" }    $manifest.Add([pscustomobject]@{
         mc        = $line.mc
         file      = [System.IO.Path]::GetFileName($target)
         bytes     = (Get-Item $target).Length

@@ -644,3 +644,4 @@ mcversion,filename,type,patch,forge,forge_ok,forge_version
 1.7.2,OptiFine_1.7.2_HD_U_F3.jar,HD_U,F3,Forge #1161,true,1161
 1.7.2,OptiFine_1.7.2_HD_U_F7.jar,HD_U,F7,Forge #1161,true,1161
 1.7.2,OptiFine_1.7.2_HD_U_F7.jar,HD_U,F7,Forge #1161,true,1161
+26.2,preview_OptiFine_26.2_HD_U_K2_pre5.jar,HD_U_K2,pre5,Forge N/A,false,

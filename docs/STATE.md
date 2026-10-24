@@ -1486,3 +1486,32 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
   四个 changelog（1.17-26 / 1.14-1.16 / 1.8-1.12 / 1.7.10）。
 - 新增 `docs/CURSEFORGE.md`：项目创建、每个文件勾选的游戏版本（只勾已实测进世界的）、
   合规声明、上架后维护建议。
+
+### 1.0.3：CurseForge 文件修正 + 26.2 K2_pre5 的定位结论
+
+**打包修正（用户可见）**
+
+- 1.0.2 的 31 个文件在注入 `optiforge/target-mc.txt` 时被 .NET 的 `ZipArchive` Update 模式写坏
+  （Forge 报 `ZipException: invalid entry size`）。改为由 `tools/inject-target-marker.py` 逐条重写后，
+  31 个文件全部可读，且 SHA-256 两两不同。
+- `tools/check-jars.py` 逐个条目读取做完整性校验，`tools/make-cf-bundle.ps1` 生成 31 个 per-MC 文件
+  （命名 `OptiForge-Reforged-<版本>+mc<MC>.jar`，与 OptiFabric Reforged 一致）。
+
+**OptiFine 26.2 HD_U_K2_pre5（本轮实测）**
+
+结论：**pre5 本身没问题，卡在我们选的"基准 jar"上**。
+
+- 现象：`prepare()` 里 ASM 抛裸 `IllegalArgumentException`；抓到的补丁产物用 `javap` 读会报
+  `Bad tag (99) at index (11)` —— 说明 xdelta 打出来的类本身是坏的。
+- 用 `tools/PatchProbe.java` 离线对照同一个类（`com/mojang/blaze3d/opengl/GlDebug`）：
+  - 以原版 `26.2.jar` 为输入 → 11659 字节，md5 `4ed284…f612`，与负载记录的 md5 **完全一致**，`javap` 可读；
+  - 以 Forge 的 `forge-26.2-65.1.5-client.jar`（binpatch 过的类）为输入 → md5 `0ad660…`，字节损坏。
+- 因此 26.x 必须以**原版 client jar** 为基准。实测：加 `-Doptiforge.vanilla=<.minecraft/versions/26.2/26.2.jar>`
+  后，26.2 + pre5 正常启动，日志 198–206 条 `[OptiFine]`、`patched 571 classes, 0 failure(s)`、0 崩溃报告。
+- 为什么不能直接改成"原版优先"：1.17–1.21 各线必须用 Forge 的 client jar 作为基准，才能保留该版本线的
+  access transformer（实测 1.21.8 换成原版基准后 `RenderPipelines.GUI_TEXTURED_SNIPPET` 仍是 private，
+  Forge 侧 `ForgeRenderTypes` 立刻 `IllegalAccessError`）。两条线需要相反的基准，自动判别尚未完成，
+  本轮先保留历史行为，并把 `-Doptiforge.vanilla` 作为 26.x 的可用办法写进文档。
+
+**下一步（1.1.0 候选）**：让基准选择按"补丁产物是否可读"判定，并在用原版基准时补做一次
+"AT + binpatch 增量合并"到被替换的类上；或者反过来，为 26.x 单独保留一份 binpatch 前的 vanilla 基准缓存。
