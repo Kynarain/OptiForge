@@ -1515,3 +1515,33 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
 
 **下一步（1.1.0 候选）**：让基准选择按"补丁产物是否可读"判定，并在用原版基准时补做一次
 "AT + binpatch 增量合并"到被替换的类上；或者反过来，为 26.x 单独保留一份 binpatch 前的 vanilla 基准缓存。
+
+### 1.0.3 追加调查：26.2/1.21.8 的基准 jar 结论（未发布改动）
+
+**已确证**
+
+- 26.2 + `K2_pre5` 可以正常跑：以**原版** `versions/26.2/26.2.jar` 为基准时，
+  日志 198–214 条 `[OptiFine]`、`patched 571 classes, 0 failure(s)`、0 崩溃报告（两次独立复现）。
+- 旧的 `diagnose.txt`（0.14.0，1.21.8 正常工作那次）记录的是
+  `base 1.21.8-forge-58.1.26.jar` —— 即**启动器 profile 里的版本 jar**
+  （`versions/<versionId>/<versionId>.jar`），既不是 Forge 的 `-client.jar`，也不是纯原版 jar。
+  当前 `findBaseJar` 只找 `forge-<tag>-client.jar` 与 `versions/<mc>/<mc>.jar`，**漏掉了这个候选**，
+  这是后来各版本线"用错基准"的根源。
+- 26.x 必须用原版 jar：把补丁打到 Forge binpatch 过的类上会产出损坏字节
+  （`javap` 报 `Bad tag (99) at index (11)`）；离线 `tools/PatchProbe.java` 对同一个类分别以
+  原版/forge-client 为输入，只有原版能产出与负载记录一致的 md5。
+
+**试过但未采用（都已回滚，避免把正常版本线弄坏）**
+
+1. 按"补丁产物可读性"打分选基准：26.2 与 1.21.8 的可读比例无法区分（两条线都有一批类不可读）。
+2. 逐类回退（主基准打坏就改用原版重打）：26.2 有效，但 1.21.8 的原版是无混淆 jar，
+   `patch/srg` 的类名对不上，反而把整包打崩。
+3. 仅按版本世代排序（26.x 原版优先、其余 forge-client 优先）：26.2 通过，1.21.8 仍因缺 profile jar 失败。
+
+**下一步（下一轮第一件事）**：在 `findBaseJar` 里补上 profile jar 候选
+（`versions/<--version 传入的 id>/<id>.jar`，从 `sun.java.command` 解析），顺序按世代：
+26.x → 原版 jar 优先；其余 → profile jar 优先、forge-client 兜底；然后回归 4 条线（1.20.1 / 1.21.8 / 26.2 / 26.1.2）。
+
+**新增的诊断工具（已提交）**：`tools/PatchProbe.java`（对指定类做基准对照）、
+`tools/compare-optifine-payload.py`（负载期望 md5 与某个 jar 的匹配率）、
+`tools/find-payload-base.py`（在整棵目录里找与负载匹配的 jar）、`tools/check-jars.py`（jar 完整性）。
