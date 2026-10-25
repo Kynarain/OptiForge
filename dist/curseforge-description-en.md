@@ -113,6 +113,7 @@ OptiFine active and no crash reports. OptiFine log line counts are from those ru
 - 1.12.2 (legacy artifact): 1669 `[OptiFine]` lines.
 - 1.14.4, 1.15.2 (old-loader artifact): 1684 and 3320 `[OptiFine]` lines.
 - 1.16.5 (old-loader artifact): starts and OptiFine loads; entering a world can crash (see Known issues).
+- 26.2 was verified with OptiFine `HD_U_K2_pre4` and `HD_U_K2_pre5`; 26.1.2 with `HD_U_K1_pre2`.
 - 1.17.1, 1.18, 1.18.1, 1.18.2, 1.19, 1.19.1, 1.19.2, 1.19.3, 1.19.4, 1.20.1, 1.20.6, 1.21, 1.21.1, 1.21.6,
   1.21.7, 1.21.8, 1.21.9, 1.21.10, 1.21.11, 26.1.2, 26.2 (main artifact).
 - 1.13.2 (old-loader artifact): starts and OptiFine loads; entering a world can crash (see Known issues).
@@ -144,6 +145,8 @@ Versions not listed above have not been tested and are not claimed to work.
 - **OptiFine `1.21.7 HD_U_J6_pre7`**: does not load shader packs. The game logs `[Shaders] No shaderpack
   loaded.`; the build's `Shaders.loadShaderPack` contains an unconditional early return, and this is present
   without OptiForge as well.
+
+**Fixed in 1.0.4:** the base jar is chosen per era (26.x patches the unobfuscated vanilla jar, 1.17-1.21 patch the launcher profile jar) and access-transformer grants also match the readable name Forge writes in the comment. Before that, 1.21.x could die with `IllegalAccessError ... RenderPipelines.GUI_TEXTURED_SNIPPET` and 26.x builds could not be patched at all.
 
 ### Troubleshooting
 

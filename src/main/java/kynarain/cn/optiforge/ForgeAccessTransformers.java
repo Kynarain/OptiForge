@@ -45,6 +45,10 @@ public final class ForgeAccessTransformers {
     private boolean widenOnly;
 
     private static final class Grant {
+
+        /** Name from the trailing comment; used when the SRG id cannot be translated. */
+        String alternate = "";
+
         final String member;
         final String descriptor; // empty when the config line carries no descriptor
         final int access;
@@ -215,8 +219,14 @@ public final class ForgeAccessTransformers {
             // Forge writes "protected-f net.minecraft.client.renderer.RenderStateShard f_110131_ # setupState":
             // the member is an SRG id and the official name is only a trailing comment. The comment has
             // to go, and the id needs translating before it can match a prepared class.
+            String commentName = "";
             int comment = line.indexOf('#');
-            if (comment >= 0) line = line.substring(0, comment).trim();
+            if (comment >= 0) {
+                String tail = line.substring(comment + 1).trim();
+                int space = tail.indexOf(' ');
+                commentName = space > 0 ? tail.substring(0, space) : tail;
+                line = line.substring(0, comment).trim();
+            }
             if (line.isEmpty()) continue;
             String[] parts = line.split("\\s+");
             // A class-level line is "public a.b.C" - only two tokens. Skipping those (parts.length < 3)
@@ -264,8 +274,9 @@ public final class ForgeAccessTransformers {
                 if (official != null) member = official;
             }
             String descriptorFinal = descriptor;
-            grants.computeIfAbsent(className, k -> new ArrayList<>())
-                    .add(new Grant(member, descriptorFinal, access, clearFinal));
+            Grant grant = new Grant(member, descriptorFinal, access, clearFinal);
+            grant.alternate = commentName;
+            grants.computeIfAbsent(className, k -> new ArrayList<>()).add(grant);
             count++;
         }
         return count;
@@ -291,13 +302,13 @@ public final class ForgeAccessTransformers {
             }
             boolean forceWiden = widenOnly || grant.wildcard;
             for (FieldNode field : node.fields) {
-                if (!grant.wildcard && !field.name.equals(grant.member)) continue;
+                if (!grant.wildcard && !field.name.equals(grant.member) && !field.name.equals(grant.alternate)) continue;
                 if (!grant.descriptor.isEmpty() && !field.desc.equals(grant.descriptor)) continue;
                 field.access = widen(field.access, grant.access, grant.clearFinal, forceWiden);
                 touched++;
             }
             for (MethodNode method : node.methods) {
-                if (!grant.wildcard && !method.name.equals(grant.member)) continue;
+                if (!grant.wildcard && !method.name.equals(grant.member) && !method.name.equals(grant.alternate)) continue;
                 if (!grant.descriptor.isEmpty() && !method.desc.equals(grant.descriptor)) continue;
                 method.access = widen(method.access, grant.access, grant.clearFinal, forceWiden);
                 touched++;

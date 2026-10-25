@@ -1545,3 +1545,30 @@ BSL 31.6M、MakeUp Ultra Fast 14.1M）在 1.21.8 + OptiFine `J6_pre13` 上分别
 **新增的诊断工具（已提交）**：`tools/PatchProbe.java`（对指定类做基准对照）、
 `tools/compare-optifine-payload.py`（负载期望 md5 与某个 jar 的匹配率）、
 `tools/find-payload-base.py`（在整棵目录里找与负载匹配的 jar）、`tools/check-jars.py`（jar 完整性）。
+
+### 1.0.4：基准 jar 选择修正（26.2 K2_pre5 现在自动可用）
+
+三处修正，全部有实测对照：
+
+1. **补上启动器 profile jar 候选**（`versions/<--version>/<id>.jar`）。1.17–1.21 的正确基准就是它
+   （旧的成功记录里写着 `base 1.21.8-forge-58.1.26.jar`），而此前的发现逻辑只看 `forge-*-client.jar`
+   与 `versions/<mc>/<mc>.jar`，恰好漏掉它。
+2. **按世代排序**：26.x 用无混淆的原版 jar（Forge binpatch 过的类会让补丁产物结构性损坏，
+   `javap` 报 `Bad tag (99)`）；其余版本线用 profile jar → forge-client → 原版 依次兜底。
+   同时去掉会误拒 profile/forge jar 的“负载 md5 必须匹配”门槛。
+3. **映射表回退 + AT 注释名匹配**：
+   - `index.txt` 里有两个条目时，"唯一表"回退不生效，1.21.8 曾因此拿不到映射表
+     （`mapping table: none available for 1.21.8`）→ 改为前缀匹配（1.21.8 → 1.21 表），26.x 不用表；
+   - 随包映射表缺少新字段（如 `f_379621_`），但 Forge 的 AT 配置把可读名写在注释里
+     （`public ... RenderPipelines f_379621_ # GUI_TEXTURED_SNIPPET`）→ AT 授权现在同时按注释名匹配，
+     否则 `ForgeRenderTypes$Internal` 会 `IllegalAccessError`。
+
+实测（每项都进到标题界面并保持 0 崩溃报告）：
+
+| 版本 | 基准 jar | OptiFine 日志 | 结果 |
+|---|---|---|---|
+| 26.2 + `K2_pre5` | `26.2.jar`（原版，自动选中） | 198–206 条 | **0 崩溃** |
+| 1.21.8 | `1.21.8-forge-58.1.26.jar`（profile jar） | 238 条 | 0 崩溃，AT 重放到 35 个类 |
+| 1.20.1 | `1.20.1-forge-47.4.20.jar` | 118 条 | 0 崩溃，AT 重放到 40 个类 |
+
+`-Doptiforge.vanilla` 仍然保留（可用于强制指定基准），但 26.x 不再需要它。

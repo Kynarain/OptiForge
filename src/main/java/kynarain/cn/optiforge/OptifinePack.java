@@ -270,20 +270,43 @@ public final class OptifinePack {
      * which is why {@code remapEnabled} is decided by the runtime namespace, not by this lookup.
      */
     public static Path pickMapping(String mcVersion, StringBuilder notes) {
+        // Only real srg-to-official tables may be chosen; 1.17.1-srg-renumber is a different kind of file.
         java.util.List<String> available = new ArrayList<>();
         try (java.io.InputStream in = OptifinePack.class.getResourceAsStream("/optiforge/mappings/index.txt")) {
             if (in != null) {
                 for (String line : new String(J8.readAll(in), StandardCharsets.UTF_8).split("\\R")) {
-                    if (!J8.isBlank(line)) available.add(line.trim());
+                    String trimmed = line.trim();
+                    if (trimmed.matches("^\\d+\\.\\d+(\\.\\d+)?$")) available.add(trimmed);
                 }
             }
         } catch (IOException ignored) {
             // fall through with an empty list
         }
+        // 26.x ships unobfuscated: its payload and its access transformers already use the runtime names, so
+        // applying an older table there would rename the wrong things.
+        if (mcVersion != null && mcVersion.startsWith("26.")) {
+            notes.append("mapping table: not applicable (").append(mcVersion).append(" is unobfuscated)\n");
+            return null;
+        }
         String chosen = null;
         if (!J8.isBlank(mcVersion) && available.contains(mcVersion)) {
             chosen = mcVersion;
-        } else if (available.size() == 1) {
+        }
+        if (chosen == null && !J8.isBlank(mcVersion)) {
+            // A 1.21 table is what the runtime needs on 1.21.8: the access transformers still carry SRG member names
+            // while the game itself uses the official ones. Longest prefix wins.
+            for (String candidate : available) {
+                if (mcVersion.startsWith(candidate)
+                        && (chosen == null || candidate.length() > chosen.length())) {
+                    chosen = candidate;
+                }
+            }
+            if (chosen != null) {
+                notes.append("mapping table: no exact table for ").append(mcVersion)
+                        .append(", using the ").append(chosen).append(" table\n");
+            }
+        }
+        if (chosen == null && available.size() == 1) {
             chosen = available.get(0);
             notes.append("mapping table: no table for ").append(mcVersion.isEmpty() ? "<unknown>" : mcVersion)
                     .append(", using the only bundled one (").append(chosen).append(")\n");
@@ -472,6 +495,20 @@ public final class OptifinePack {
             }
         }
 
+        // The launcher profile jar: versions/<versionId>/<versionId>.jar, where the version id comes from the
+        // --version launch argument. This is the jar the launcher actually starts the game with, and it is the
+        // historically working base on 1.17-1.21 (an old diagnose recorded "base 1.21.8-forge-58.1.26.jar").
+        List<Path> profiles = new ArrayList<>();
+        String profileId = launchVersionId();
+        if (!J8.isBlank(profileId) && !J8.isBlank(mc)) {
+            if (gameDir != null) {
+                profiles.add(gameDir.resolve("versions").resolve(profileId).resolve(profileId + ".jar"));
+            }
+            for (Path root : versionRoots) {
+                profiles.add(root.resolve("versions").resolve(profileId).resolve(profileId + ".jar"));
+            }
+        }
+
         // Forge's patched client jar: the jar the game classes actually come from on the modern lines.
         List<Path> forgeClients = new ArrayList<>();
         if (!J8.isBlank(mc) && !J8.isBlank(forge)) {
@@ -494,11 +531,21 @@ public final class OptifinePack {
             }
         }
 
+        // Which jar the payload patches depends on the era, and the difference is measurable rather than
+        // cosmetic. 1.17-1.21 payloads are written against the classes of the jar the launcher starts the game
+        // with (the profile jar, SRG-named and already carrying the line's access transformers); 26.x ships
+        // unobfuscated and its payload is applied to the plain vanilla classes. Patching a Forge-binpatched class
+        // jar on 26.2 yields structurally broken class files (javap: "Bad tag (99) at index 11"), while patching
+        // the vanilla jar on 1.21.8 leaves RenderPipelines.GUI_TEXTURED_SNIPPET private and ForgeRenderTypes dies
+        // with IllegalAccessError - so each era needs its own base.
         List<Path> ordered = new ArrayList<>();
-        if (Bootstrap.legacy()) {
+        boolean unobfuscatedLine = mc != null && mc.startsWith("26.");
+        if (Bootstrap.legacy() || unobfuscatedLine) {
             ordered.addAll(vanilla);
+            ordered.addAll(profiles);
             ordered.addAll(forgeClients);
         } else {
+            ordered.addAll(profiles);
             ordered.addAll(forgeClients);
             ordered.addAll(vanilla);
         }
@@ -515,22 +562,14 @@ public final class OptifinePack {
                 return bySize != 0 ? bySize : a.compareTo(b);
             });
             if (probe.remove("net/minecraft/CrashReport")) probe.add(0, "net/minecraft/CrashReport");
+            // The candidate list is ordered by era above, so the first existing jar is the right base. Probing the
+            // payload's recorded MD5s here was counterproductive - a Forge or profile jar never reproduces them
+            // because its classes carry the line's access transformers - so the probe rejected the very jar the
+            // line needs and the pack was silently built from the vanilla jar instead.
             for (Path candidate : candidates) {
-                String confirmed = confirmBase(patcher, probe, candidate);
-                if (confirmed != null) {
-                    notes.append("base jar: ").append(candidate.getFileName())
-                            .append(" (confirmed by ")
-                            .append(patcher.mode() == OptifinePatcher.Mode.NOTCH ? "patch/" : "patch/srg/")
-                            .append(confirmed).append(".class MD5)\n");
-                    return candidate;
-                }
-                if (J8.isBlank(override) || !sameFile(candidate, Paths.get(override))) {
-                    notes.append("  base candidate rejected: ").append(candidate.getFileName()).append('\n');
-                } else {
-                    notes.append("  base candidate rejected: ").append(candidate.getFileName())
-                            .append(" (this is the -Doptiforge.vanilla value; it does not carry the payload's"
-                                    + " base bytes)\n");
-                }
+                if (!Files.isRegularFile(candidate)) continue;
+                notes.append("base jar: ").append(candidate.getFileName()).append('\n');
+                return candidate;
             }
         } catch (IOException e) {
             notes.append("could not open the OptiFine patcher: ").append(e).append('\n');
@@ -556,6 +595,16 @@ public final class OptifinePack {
             }
         }
         return null;
+    }
+
+    /** Reads the {@code --version} value from {@code sun.java.command}; "" when the launcher did not pass one. */
+    private static String launchVersionId() {
+        String command = System.getProperty("sun.java.command", "");
+        String[] parts = command.split(" ");
+        for (int i = 0; i + 1 < parts.length; i++) {
+            if ("--version".equals(parts[i])) return parts[i + 1];
+        }
+        return "";
     }
 
     private static boolean sameFile(Path a, Path b) {
