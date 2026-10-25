@@ -138,7 +138,7 @@ OptiFine active and no crash reports. OptiFine log line counts are from those ru
 - 1.12.2 (legacy artifact): 1669 `[OptiFine]` lines.
 - 1.14.4, 1.15.2 (old-loader artifact): 1684 and 3320 `[OptiFine]` lines.
 - 1.16.5 (old-loader artifact): starts and OptiFine loads; entering a world can crash (see Known issues).
-- 26.2 was verified with OptiFine `HD_U_K2_pre4` and `HD_U_K2_pre5`; 26.1.2 with `HD_U_K1_pre2`.
+- 26.2 was verified in a world (Forge dedicated server) with OptiFine `HD_U_K2_pre4` and `HD_U_K2_pre5`; 26.1.2 with `HD_U_K1_pre2`.
 - 1.17.1, 1.18, 1.18.1, 1.18.2, 1.19, 1.19.1, 1.19.2, 1.19.3, 1.19.4, 1.20.1, 1.20.6, 1.21, 1.21.1, 1.21.6,
   1.21.7, 1.21.8, 1.21.9, 1.21.10, 1.21.11, 26.1.2, 26.2 (main artifact).
 - 1.13.2 (old-loader artifact): starts and OptiFine loads; entering a world can crash (see Known issues).
@@ -328,7 +328,7 @@ Java 列是这些 Forge 版本自身的运行要求：1.17–1.20.4 用 17，1.2
 - 1.12.2（legacy 产物）：1669 条 `[OptiFine]`。
 - 1.14.4、1.15.2（old-loader 产物）：1684 与 3320 条 `[OptiFine]`。
 - 1.16.5（old-loader 产物）：能启动、OptiFine 正常加载；进世界可能崩（见已知问题）。
-- 26.2 用 OptiFine `HD_U_K2_pre4` 与 `HD_U_K2_pre5` 各验证一次；26.1.2 用 `HD_U_K1_pre2`。
+- 26.2 用 OptiFine `HD_U_K2_pre4` 与 `HD_U_K2_pre5` 各进世界验证一次；26.1.2 用 `HD_U_K1_pre2`。
 - 1.17.1、1.18、1.18.1、1.18.2、1.19、1.19.1、1.19.2、1.19.3、1.19.4、1.20.1、1.20.6、1.21、1.21.1、
   1.21.6、1.21.7、1.21.8、1.21.9、1.21.10、1.21.11、26.1.2、26.2（主产物）。
 - 1.13.2（old-loader 产物）：能启动、OptiFine 正常加载；进世界可能崩（见已知问题）。
